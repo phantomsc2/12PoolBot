@@ -1,10 +1,13 @@
 from collections.abc import Iterable
+from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import chain, cycle
+from typing import Annotated
 
 import numpy as np
 from ares.consts import DEBUG, EngagementResult
 from cython_extensions.dijkstra import cy_dijkstra
+from leitwerk import Parameter
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
@@ -23,18 +26,27 @@ class CombatAction(Enum):
     Retreat = auto()
 
 
+@dataclass(frozen=True)
+class MicroParams:
+    attack_threshold: Annotated[float, Parameter()]
+
+
 class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
         self._action_cache: dict[int, Action] = {}
 
-    def micro(self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int) -> Iterable[Action]:
+    def micro(
+        self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int, params: MicroParams
+    ) -> Iterable[Action]:
         return chain(
-            self.micro_army(combat, pathing, supply_used),
+            self.micro_army(combat, pathing, supply_used, params),
             self.micro_queens(),
         )
 
-    def micro_army(self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int) -> Iterable[Action]:
+    def micro_army(
+        self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int, params: MicroParams
+    ) -> Iterable[Action]:
         units = sorted(self.units({UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.MUTALISK}), key=lambda u: u.tag)
         target_units = sorted(combat.enemy_units.not_flying, key=lambda u: u.tag)
         civilians = self.workers
@@ -72,9 +84,7 @@ class Micro(Component):
             attack_path = attack_pathing.get_path(p, attack_path_limit)
             outcome = combat.prediction.outcome_for[unit.tag]
 
-            bias = 0.0
-            bias += 4 * (supply_used / 200) ** 2
-            if outcome + bias > EngagementResult.TIE:
+            if outcome + params.attack_threshold > EngagementResult.TIE:
                 combat_action = CombatAction.Attack
             elif pathing[p] > 1:
                 combat_action = CombatAction.Retreat

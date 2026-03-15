@@ -14,7 +14,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 
 from .combat_predictor import CombatPredictor, CombatPredictorParams
 from .components.macro import Macro
-from .components.micro import Micro
+from .components.micro import Micro, MicroParams
 from .components.strategy import Strategy
 from .consts import (
     EXCLUDE_FROM_COMBAT,
@@ -29,6 +29,7 @@ from .consts import (
 @dataclass(frozen=True)
 class BotParams:
     combat_predictor: CombatPredictorParams
+    micro: MicroParams
 
 
 class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
@@ -76,7 +77,7 @@ class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
 
         pathing = self.mediator.get_ground_grid.astype(float)
         macro_actions = list(self.macro(strategy.build_unit))
-        micro_actions = list(self.micro(predictor, pathing, self.supply_used))
+        micro_actions = list(self.micro(predictor, pathing, self.supply_used, self.params.micro))
 
         # avoid APM limit
         if self.max_micro_actions < len(micro_actions):
