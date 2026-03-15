@@ -29,7 +29,7 @@ class Strategy(Component):
             for h in self.townhalls
         )
         minerals_for_lings = 50 * 60 * larva_per_second  # maximum we can possibly spend on lings
-        max_spending = minerals_for_lings  # aim for a 20% surplus
+        max_spending = minerals_for_lings
         should_drone = (
             self.minerals < 150
             and self.state.score.collection_rate_minerals < 1.2 * max_spending  # aim for a 20% surplus

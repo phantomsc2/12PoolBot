@@ -12,7 +12,7 @@ from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
 
 from ..action import Action, AttackMove, HoldPosition, Move, UseAbility
-from ..combat_predictor_sim import CombatPredictor
+from ..combat_predictor import CombatPredictor
 from .component import Component
 
 Point = tuple[int, int]

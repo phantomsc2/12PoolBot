@@ -17,7 +17,7 @@ from leitwerk import Optimizer
 from loguru import logger
 from sc2.ids.unit_typeid import UnitTypeId
 
-from .combat_predictor_sim import CombatPredictor, CombatPrediction, CombatPredictorParams
+from .combat_predictor import CombatPredictor, CombatPrediction, CombatPredictorParams
 from .components.macro import Macro
 from .components.micro import Micro
 from .components.strategy import Strategy
