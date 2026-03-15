@@ -1,18 +1,23 @@
 import cProfile
 import io
+import json
 import os
 import pstats
 import random
 import sys
+from dataclasses import dataclass
 from functools import lru_cache
 from itertools import chain
 
+from sc2.data import Result
+
 from ares import DEBUG, AresBot
 from ares.behaviors.macro import Mining
+from leitwerk import Optimizer
 from loguru import logger
 from sc2.ids.unit_typeid import UnitTypeId
 
-from .combat_predictor_sim import CombatPredictor, CombatPrediction
+from .combat_predictor_sim import CombatPredictor, CombatPrediction, CombatPredictorParams
 from .components.macro import Macro
 from .components.micro import Micro
 from .components.strategy import Strategy
@@ -23,17 +28,35 @@ from .consts import (
     TAG_ACTION_FAILED,
     TAG_MICRO_THROTTLING,
     UNKNOWN_VERSION,
-    VERSION_FILE,
+    VERSION_FILE, PARAMS_FILE,
 )
 from .tags import Tags
+
+
+@dataclass(frozen=True)
+class BotParams:
+    combat_predictor: CombatPredictorParams
+
 
 class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
     max_micro_actions = 80
     version: str = UNKNOWN_VERSION
     tags: Tags
+    optimizer = Optimizer(BotParams)
+    params: BotParams
 
     async def on_start(self) -> None:
         await super().on_start()
+
+        if PARAMS_FILE.exists():
+            self.optimizer.load(json.loads(PARAMS_FILE.read_text()))
+
+        context = {
+            "enemy_race": self.enemy_race.name
+        }
+        logger.info(f"{context=}")
+        self.params = self.optimizer.ask(context)
+        logger.info(f"{self.params=}")
 
         self.tags = Tags(lambda m: self.chat_send(m, team_only=True))
 
@@ -66,7 +89,7 @@ class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
         
         units = self.all_own_units.exclude_type(EXCLUDE_FROM_COMBAT)
         enemy_units = self.all_enemy_units.exclude_type(EXCLUDE_FROM_COMBAT)
-        predictor = CombatPredictor(self, units, enemy_units)
+        predictor = CombatPredictor(self, units, enemy_units, self.params.combat_predictor)
 
         if strategy.build_unit not in {UnitTypeId.ZERGLING, UnitTypeId.DRONE}:
             await self.tags.add_tag(f"macro_{strategy.build_unit.name}")
@@ -111,3 +134,8 @@ class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
             return max(units[0].ground_dps, units[0].air_dps)
         else:
             return 0.0
+
+    async def on_end(self, game_result: Result) -> None:
+        await super().on_end(game_result)
+
+        PARAMS_FILE.parent.mkdir(parents=True, exist_ok=True)

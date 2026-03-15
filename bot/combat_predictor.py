@@ -2,10 +2,12 @@ from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import chain
+from typing import Annotated
 
 import numpy as np
 from ares import AresBot
 from ares.consts import EngagementResult
+from leitwerk import Parameter
 from sc2.unit import Unit
 from sc2.units import Units
 from sklearn.metrics import pairwise_distances
@@ -36,13 +38,18 @@ class CombatPrediction:
     outcome_for: Mapping[int, EngagementResult]
 
 
+@dataclass(frozen=True)
+class CombatPredictorParams:
+    contact_range_internal: Annotated[float, Parameter(loc=6, scale=2, min=0)]
+    contact_range: Annotated[float, Parameter(loc=12, scale=3, min=0)]
+
+
 class CombatPredictor:
-    def __init__(self, bot: AresBot, units: Units, enemy_units: Units):
+    def __init__(self, bot: AresBot, units: Units, enemy_units: Units, params: CombatPredictorParams):
         self.bot = bot
         self.units = units
         self.enemy_units = enemy_units
-        self.contact_range_internal = 6
-        self.contact_range = 12
+        self.params = params
         self.prediction = self._predict()
 
     def _predict(self) -> CombatPrediction:
@@ -62,9 +69,9 @@ class CombatPredictor:
         enemy_positions = [u.position for u in self.enemy_units]
         distance_matrix = pairwise_distances(positions, enemy_positions)
 
-        contact = np.where(distance_matrix < self.contact_range, 1, 0)
+        contact = np.where(distance_matrix < self.params.contact_range, 1, 0)
         contact_own = np.zeros((n, n))
-        contact_enemy = np.where(pairwise_distances(enemy_positions) < self.contact_range_internal, 1, 0)
+        contact_enemy = np.where(pairwise_distances(enemy_positions) < self.params.contact_range_internal, 1, 0)
 
         adjacency_matrix = np.block([[contact_own, contact], [contact.T, contact_enemy]])
         components = graph_components(adjacency_matrix)
