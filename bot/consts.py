@@ -10,12 +10,6 @@ TAG_MICRO_THROTTLING: str = "micro_throttling"
 TAG_ACTION_FAILED: str = "action_failed"
 ALL_UNITS = ALL_STRUCTURES | set(abilityid_to_unittypeid.values())
 EXCLUDE_FROM_COMBAT = WORKER_TYPES | CHANGELING_TYPES | {UnitTypeId.LARVA, UnitTypeId.EGG}
-PROFILING_FILE = "profiling"
 
 DATA_DIR = Path("./data")
 PARAMS_FILE = DATA_DIR / "params.json"
-
-DPS_OVERRIDE = {
-    UnitTypeId.BUNKER: 40,
-    UnitTypeId.PLANETARYFORTRESS: 5,
-}

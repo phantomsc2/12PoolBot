@@ -1,4 +1,7 @@
+name: Ladder Zip
+
 on:
+  pull_request:
   push:
     branches: [ main ]
 
@@ -9,8 +12,6 @@ jobs:
       # check-out repo
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
       - name: Checkout submodules
         run: git submodule update --init --recursive
       # install poetry
@@ -26,6 +27,8 @@ jobs:
         run: poetry run pip install -U pip
       - name: Install requirements
         run: poetry install --no-root
+      - name: Run checks
+        run: make check
       - name: Save commit hash
         env:
           GITHUB_COMMIT: ${{ github.sha }}

@@ -1,4 +1,5 @@
 import os
+
 import requests
 
 API_TOKEN_ENV: str = "UPLOAD_API_TOKEN"
@@ -8,12 +9,12 @@ README_FILE_NAME: str = "README.md"
 
 token = os.environ.get(API_TOKEN_ENV)
 bot_id = os.environ.get(BOT_ID_ENV)
-url = f'https://aiarena.net/api/bots/{bot_id}/'
+url = f"https://aiarena.net/api/bots/{bot_id}/"
 
 print("Uploading bot")
 with (
     open(ZIPFILE_NAME, "rb") as bot_zip,
-    open(README_FILE_NAME, "r") as readme,
+    open(README_FILE_NAME) as readme,
 ):
     request_headers = {
         "Authorization": f"Token {token}",

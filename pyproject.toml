@@ -21,6 +21,12 @@ setuptools = "^70.1.0"
 torch = "^2.3.1"
 leitwerk = {git = "https://github.com/phantomsc2/leitwerk.git"}
 
+[tool.poetry.group.dev.dependencies]
+mypy = ">=1.10,<2.0"
+ruff = ">=0.11,<1.0"
+types-requests = "^2.32.4.20260107"
+types-pyyaml = "^6.0.12.20250915"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
@@ -35,6 +41,26 @@ line-length = 120
 [tool.isort]
 profile = "black"
 skip_glob = ["ares-sc2/*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["bot", "scripts"]
+extend-exclude = ["ares-sc2", "build", "notebooks", "resources"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["bot", "scripts", "run.py", "ladder.py"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+strict_equality = true
+no_implicit_optional = true
+ignore_missing_imports = true
+exclude = "(^ares-sc2/|^build/|^notebooks/|^resources/)"
 
 [[tool.mypy.overrides]]
 module = [

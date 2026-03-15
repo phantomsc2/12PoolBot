@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import chain
@@ -8,12 +8,11 @@ import numpy as np
 from ares import AresBot
 from ares.consts import EngagementResult
 from leitwerk import Parameter
-from sc2.unit import Unit
 from sc2.units import Units
 from sklearn.metrics import pairwise_distances
 
 
-def graph_components(adjacency_matrix: np.ndarray) -> Set[Sequence[int]]:
+def graph_components(adjacency_matrix: np.ndarray) -> list[set[int]]:
     components = list[set[int]]()
     for i in range(adjacency_matrix.shape[0]):
         connected_to = set(np.nonzero(adjacency_matrix[i, :i])[0])
@@ -23,7 +22,7 @@ def graph_components(adjacency_matrix: np.ndarray) -> Set[Sequence[int]]:
                 components.remove(c)
                 new_component.update(c)
         components.append(new_component)
-    return set(map(tuple, map(sorted, components)))
+    return components
 
 
 class CombatOutcome(Enum):
@@ -40,8 +39,8 @@ class CombatPrediction:
 
 @dataclass(frozen=True)
 class CombatPredictorParams:
-    contact_range_internal: Annotated[float, Parameter(loc=6, scale=2, min=0)]
-    contact_range: Annotated[float, Parameter(loc=12, scale=3, min=0)]
+    contact_range_internal: Annotated[float, Parameter(loc=6, scale=1, min=0)]
+    contact_range: Annotated[float, Parameter(loc=12, scale=2, min=0)]
 
 
 class CombatPredictor:
@@ -54,7 +53,7 @@ class CombatPredictor:
 
     def _predict(self) -> CombatPrediction:
         n = len(self.units)
-        m = len(self.enemy_units)
+        len(self.enemy_units)
 
         units = list(chain(self.units, self.enemy_units))
 
@@ -81,10 +80,7 @@ class CombatPredictor:
             workers_do_no_damage=False,
         )
         outcome = self.bot.mediator.can_win_fight(
-            own_units=self.units,
-            enemy_units=self.enemy_units,
-            timing_adjust=False,
-            **simulator_kwargs
+            own_units=self.units, enemy_units=self.enemy_units, timing_adjust=False, **simulator_kwargs
         )
 
         outcome_for = dict[int, EngagementResult]()

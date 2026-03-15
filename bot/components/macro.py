@@ -1,5 +1,5 @@
+from collections.abc import Iterable
 from functools import cached_property
-from typing import Iterable
 
 from ares.consts import ALL_STRUCTURES
 from sc2.dicts.unit_train_build_abilities import TRAIN_INFO
@@ -40,9 +40,9 @@ class Macro(Component):
         return DoNothing()
 
     def expand(self) -> Action | None:
-        if not self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
-            return None
-        elif not (target := self.get_next_free_expansion()):
+        if not self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED) or not (
+            target := self.get_next_free_expansion()
+        ):
             return None
         return self.build_unit(UnitTypeId.HATCHERY, target=target, limit=1)
 
@@ -75,9 +75,7 @@ class Macro(Component):
     ) -> Unit | None:
         def filter_trainer(t: Unit) -> bool:
             # TODO: handle reactors
-            if t.type_id in ALL_STRUCTURES and not t.is_idle:
-                return False
-            return True
+            return not (t.type_id in ALL_STRUCTURES and not t.is_idle)
 
         def trainer_priority(t: Unit) -> float:
             return -t.position.distance_to(target or self.start_location)
@@ -97,24 +95,21 @@ class Macro(Component):
         return max(trainers, key=trainer_priority, default=None)
 
     def build_unit(self, unit: UnitTypeId, target: Point2 | None = None, limit: int | None = None) -> Action | None:
-        if self.supply_left < self.calculate_supply_cost(unit):
-            return None
-        elif limit is not None and limit <= self.already_pending(unit):
-            return None
-        elif not (trainer := self.find_trainer(unit, target=target)):
-            return None
-        elif not self.can_afford(unit):
-            return None
-        elif self.tech_requirement_progress(unit) < 1:
+        if (
+            self.supply_left < self.calculate_supply_cost(unit)
+            or limit is not None
+            and limit <= self.already_pending(unit)
+            or not (trainer := self.find_trainer(unit, target=target))
+            or not self.can_afford(unit)
+            or self.tech_requirement_progress(unit) < 1
+        ):
             return None
         elif TRAIN_INFO[trainer.type_id][unit].get("requires_placement_position", False):
             return Build(trainer, unit, target)
         return Train(trainer, unit)
 
     def research_upgrade(self, upgrade: UpgradeId) -> Action | None:
-        if self.already_pending_upgrade(upgrade):
-            return None
-        elif not (researcher := self.find_trainer(upgrade)):
+        if self.already_pending_upgrade(upgrade) or not (researcher := self.find_trainer(upgrade)):
             return None
         elif not self.can_afford(upgrade):
             # return DoNothing()

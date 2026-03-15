@@ -1,12 +1,10 @@
-import math
-from dataclasses import dataclass
+from collections.abc import Iterable
 from enum import Enum, auto
 from itertools import chain, cycle
-from typing import Iterable
 
 import numpy as np
 from ares.consts import DEBUG, EngagementResult
-from cython_extensions.dijkstra import cy_dijkstra  # type: ignore
+from cython_extensions.dijkstra import cy_dijkstra
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
@@ -65,6 +63,7 @@ class Micro(Component):
         if self.config[DEBUG]:
             self.mediator.get_map_data_object.draw_influence_in_game(pathing)
 
+        action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             p = unit.position.rounded
             attack_path_limit = 5
@@ -72,7 +71,7 @@ class Micro(Component):
             outcome = combat.prediction.outcome_for[unit.tag]
 
             bias = 0.0
-            bias += 4 * (supply_used / 200)**2
+            bias += 4 * (supply_used / 200) ** 2
             if outcome + bias > EngagementResult.TIE:
                 combat_action = CombatAction.Attack
             elif pathing[p] > 1:
@@ -105,11 +104,11 @@ class Micro(Component):
     def micro_queens(self) -> Iterable[Action]:
         queens = sorted(self.mediator.get_own_army_dict[UnitTypeId.QUEEN], key=lambda u: u.tag)
         hatcheries = sorted(self.townhalls, key=lambda u: u.distance_to(self.start_location))
-        for queen, hatchery in zip(queens, hatcheries):
+        for queen, hatchery in zip(queens, hatcheries, strict=False):
             queen_position = hatchery.position.towards(self.game_info.map_center, queen.radius + hatchery.radius)
-            if 25 <= queen.energy and hatchery.is_ready:
+            if queen.energy >= 25 and hatchery.is_ready:
                 yield UseAbility(queen, AbilityId.EFFECT_INJECTLARVA, hatchery)
-            elif 1 < queen.distance_to(queen_position):
+            elif queen.distance_to(queen_position) > 1:
                 yield AttackMove(queen, queen_position)
 
     def random_scout_target(self, num_attempts=10) -> Point2:

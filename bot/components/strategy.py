@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-import numpy as np
 from cython_extensions import cy_unit_pending
 from sc2.ids.buff_id import BuffId
 from sc2.ids.unit_typeid import UnitTypeId

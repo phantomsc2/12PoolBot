@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 from ares import AresBot
 from ares.consts import UnitRole
@@ -52,7 +51,7 @@ class HoldPosition(Action):
 class UseAbility(Action):
     unit: Unit
     ability: AbilityId
-    target: Optional[Point2] = None
+    target: Point2 | None = None
 
     async def execute(self, bot: AresBot) -> bool:
         return self.unit(self.ability, target=self.target)

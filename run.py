@@ -2,7 +2,6 @@ import random
 import sys
 from os import path
 from pathlib import Path
-from typing import List
 
 from sc2 import maps
 from sc2.data import AIBuild, Difficulty, Race
@@ -14,7 +13,6 @@ sys.path.append("ares-sc2/src")
 sys.path.append("ares-sc2")
 
 import yaml
-
 from bot.main import TwelvePoolBot
 from ladder import run_ladder_game
 
