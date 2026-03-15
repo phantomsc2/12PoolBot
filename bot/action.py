@@ -21,7 +21,7 @@ class DoNothing(Action):
         return True
 
 
-@dataclass
+@dataclass(frozen=True)
 class AttackMove(Action):
     unit: Unit
     target: Point2
@@ -30,7 +30,7 @@ class AttackMove(Action):
         return self.unit.attack(self.target)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Move(Action):
     unit: Unit
     target: Point2
@@ -39,7 +39,7 @@ class Move(Action):
         return self.unit.move(self.target)
 
 
-@dataclass
+@dataclass(frozen=True)
 class HoldPosition(Action):
     unit: Unit
 
@@ -47,7 +47,7 @@ class HoldPosition(Action):
         return self.unit.stop()
 
 
-@dataclass
+@dataclass(frozen=True)
 class UseAbility(Action):
     unit: Unit
     ability: AbilityId
@@ -57,7 +57,7 @@ class UseAbility(Action):
         return self.unit(self.ability, target=self.target)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Build(Action):
     unit: Unit
     type_id: UnitTypeId
@@ -72,7 +72,7 @@ class Build(Action):
             return False
 
 
-@dataclass
+@dataclass(frozen=True)
 class Train(Action):
     trainer: Unit
     unit: UnitTypeId
@@ -81,7 +81,7 @@ class Train(Action):
         return self.trainer.train(self.unit)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Research(Action):
     researcher: Unit
     upgrade: UpgradeId

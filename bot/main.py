@@ -24,7 +24,6 @@ from .consts import (
     UNKNOWN_VERSION,
     VERSION_FILE,
 )
-from .tags import Tags
 
 
 @dataclass(frozen=True)
@@ -33,12 +32,12 @@ class BotParams:
 
 
 class TwelvePoolBot(Strategy, Micro, Macro, AresBot):
-    max_micro_actions = 80
-    version: str = UNKNOWN_VERSION
-    tags: Tags
-    optimizer = Optimizer(BotParams)
-    params: BotParams
-    _tags: set[str] = set()
+    def __init__(self) -> None:
+        super().__init__()
+        self.max_micro_actions = 80
+        self.version: str = UNKNOWN_VERSION
+        self.optimizer = Optimizer(BotParams)
+        self._tags: set[str] = set()
 
     async def on_start(self) -> None:
         await super().on_start()

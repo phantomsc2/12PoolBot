@@ -7,7 +7,7 @@
 
 # Save the game opening and result to disk?
 # Setting to `True` allows Ares to select a new opening after defeat
-UseData: True
+UseData: False
 # How should we choose a build? Cycle is the only option for now
 BuildSelection: Cycle
 # For each Race / Opponent ID choose a build selection
@@ -17,31 +17,26 @@ BuildChoices:
         BotName: Test
         Cycle:
             - TwelvePool
-            - RoachRush
 
     Protoss:
         BotName: ProtossRace
         Cycle:
             - TwelvePool
-            - RoachRush
 
     Random:
         BotName: RandomRace
         Cycle:
             - TwelvePool
-            - RoachRush
 
     Terran:
         BotName: TerranRace
         Cycle:
             - TwelvePool
-            - RoachRush
 
     Zerg:
         BotName: ZergRace
         Cycle:
             - TwelvePool
-            - RoachRush
 
 Builds:
     TwelvePool:
@@ -56,33 +51,3 @@ Builds:
             - 13 drone
             - 14 extractor
             - 13 overlord
-
-    RoachRush:
-        OpeningBuildOrder:
-            - 0 overlord_scout:
-                  [enemy_nat_hg_spot]
-            - 0 drone
-            - 0 drone
-            - 0 overlord
-            - 0 spawningpool
-            - 0 drone
-            - 0 drone
-            - 0 drone
-            - 0 drone
-            - 0 drone
-            - 0 extractor
-            - 0 hatchery
-            - 0 queen
-            - 0 zergling
-            - 0 roachwarren
-            - 0 drone
-            - 0 drone
-            - 0 overlord
-            - 0 roach
-            - 0 roach
-            - 0 roach
-            - 0 roach
-            - 0 roach
-            - 0 roach
-            - 0 roach
-            - 0 roach

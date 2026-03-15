@@ -4,16 +4,14 @@ from cython_extensions import cy_unit_pending
 from sc2.ids.buff_id import BuffId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
-from sc2.position import Point2
 
 from .component import Component
 
 
-@dataclass
+@dataclass(frozen=True)
 class StrategyDecision:
     build_unit: UnitTypeId
     vespene_target: int
-    tech_building_position: Point2
 
 
 class Strategy(Component):
@@ -46,9 +44,7 @@ class Strategy(Component):
         mine_gas = early_game or mine_gas_for_speed or mutalisk_switch
 
         vespene_target = 3 if mine_gas else 0
-        tech_building_position = self.start_location.towards(self.game_info.map_center, 8)
         return StrategyDecision(
             build_unit=build_unit,
             vespene_target=vespene_target,
-            tech_building_position=tech_building_position,
         )

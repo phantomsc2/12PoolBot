@@ -24,7 +24,9 @@ class CombatAction(Enum):
 
 
 class Micro(Component):
-    _action_cache: dict[int, Action] = {}
+    def __init__(self) -> None:
+        super().__init__()
+        self._action_cache: dict[int, Action] = {}
 
     def micro(self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int) -> Iterable[Action]:
         return chain(
@@ -66,7 +68,7 @@ class Micro(Component):
         action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             p = unit.position.rounded
-            attack_path_limit = 5
+            attack_path_limit = 3
             attack_path = attack_pathing.get_path(p, attack_path_limit)
             outcome = combat.prediction.outcome_for[unit.tag]
 
