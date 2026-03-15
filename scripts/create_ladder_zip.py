@@ -32,7 +32,7 @@ ZIP_FILES: list[str] = [
     "zerg_builds.yaml",
 ]
 EXCLUDE = list[str]()
-FILETYPES_TO_IGNORE = list[str]()
+FILETYPES_TO_IGNORE = tuple[str, ...]()
 if platform.system() == "Windows":
     EXCLUDE.extend(
         [
@@ -43,7 +43,7 @@ if platform.system() == "Windows":
             "map_analyzer\\pickle_gameinfo",
         ]
     )
-    FILETYPES_TO_IGNORE.extend([".c", ".so", "pyx", "pyi"])
+    FILETYPES_TO_IGNORE = (".c", ".so", "pyx", "pyi")
     ROOT_DIRECTORY = "./"
 else:
     EXCLUDE.extend(
@@ -55,7 +55,7 @@ else:
             "map_analyzer/pickle_gameinfo",
         ]
     )
-    FILETYPES_TO_IGNORE.extend([".c", ".pyd", "pyx", "pyi"])
+    FILETYPES_TO_IGNORE = (".c", ".pyd", "pyx", "pyi")
     ROOT_DIRECTORY = "./"
 
 ZIP_DIRECTORIES: dict[str, dict] = {
