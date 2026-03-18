@@ -210,7 +210,7 @@ if __name__ == "__main__":
     run("git clone https://github.com/raspersc2/SC2MapAnalysis", shell=True)
     # cython extensions
     run("git clone https://github.com/AresSC2/cython-extensions-sc2", shell=True)
-    # run("cd cython-extensions-sc2 && poetry build", shell=True)
+    run("cd cython-extensions-sc2 && poetry build", shell=True)
 
     # clone sc2-helper
     # run("git clone https://github.com/danielvschoor/sc2-helper", shell=True)
