@@ -24,8 +24,8 @@ MAP_FILE_EXT: str = "SC2Map"
 MY_BOT_NAME: str = "MyBotName"
 MY_BOT_RACE: str = "MyBotRace"
 MAP_VETOS: list[str] = [
-    "Tier1MicroAIArena_v4",
-    "Tier2MicroAIArena_v4",
+    "Tier1MicroAIArena_v6",
+    "Tier2MicroAIArena_v6",
 ]
 
 

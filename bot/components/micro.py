@@ -5,7 +5,7 @@ from itertools import chain, cycle
 from typing import Annotated
 
 import numpy as np
-from ares.consts import DEBUG, EngagementResult
+from ares.consts import EngagementResult
 from cython_extensions.dijkstra import cy_dijkstra
 from leitwerk import Parameter
 from sc2.ids.ability_id import AbilityId
@@ -73,9 +73,6 @@ class Micro(Component):
             pathing,
             np.array(retreat_targets, dtype=np.intp),
         )
-
-        if self.config[DEBUG]:
-            self.mediator.get_map_data_object.draw_influence_in_game(pathing)
 
         action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
