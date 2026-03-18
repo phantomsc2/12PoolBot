@@ -1,4 +1,4 @@
-![Zergling Rush!](banner.png)
+![Zergling Rush!](https://raw.githubusercontent.com/phantomsc2/12PoolBot/main/banner.png)
 
 [GitHub Repo](https://github.com/vschmidt91/12PoolBot)
 
