@@ -64,7 +64,7 @@ ZIP_DIRECTORIES: dict[str, dict] = {
     "python-sc2": {"zip_all": False, "folder_to_zip": "sc2"},
     # "sc2_helper": {"zip_all": True, "folder_to_zip": "sc2_helper"},
     "SC2MapAnalysis": {"zip_all": False, "folder_to_zip": "map_analyzer"},
-    "cython_extensions": {"zip_all": True, "folder_to_zip": "cython_extensions"},
+    "cython-extensions-sc2": {"zip_all": False, "folder_to_zip": "cython_extensions"},
 }
 
 
