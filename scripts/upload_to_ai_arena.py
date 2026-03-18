@@ -21,7 +21,7 @@ with (
     }
     request_data = {
         "bot_zip_publicly_downloadable": True,
-        "bot_data_publicly_downloadable": False,
+        "bot_data_publicly_downloadable": True,
         "bot_data_enabled": True,
         "wiki_article_content": readme.read(),
     }
