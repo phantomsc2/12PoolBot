@@ -29,6 +29,7 @@ class CombatAction(Enum):
 @dataclass(frozen=True)
 class MicroParams:
     attack_threshold: Annotated[float, Parameter()]
+    supply_confidence_boost: Annotated[float, Parameter(loc=5.0, scale=1.0, min=0.0)]
 
 
 class Micro(Component):
@@ -80,8 +81,9 @@ class Micro(Component):
             attack_path_limit = 3
             attack_path = attack_pathing.get_path(p, attack_path_limit)
             outcome = combat.prediction.outcome_for[unit.tag]
+            confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
 
-            if outcome + params.attack_threshold > EngagementResult.TIE:
+            if outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
                 combat_action = CombatAction.Attack
             elif pathing[p] > 1:
                 combat_action = CombatAction.Retreat
