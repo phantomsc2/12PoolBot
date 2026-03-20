@@ -46,10 +46,10 @@ class Micro(Component):
 
     def micro(self, combat: CombatPredictor, params: MicroParams) -> Iterable[Action]:
 
-        if self.supply_used > self.commit_at_supply:
+        if not self._commit and self.supply_used > self.commit_at_supply:
             logger.info(f"Reached {self.supply_used} supply, committing hard")
             self._commit = True
-        elif self.supply_used < self.commit_cancel_at_supply:
+        if self._commit and self.supply_used < self.commit_cancel_at_supply:
             logger.info(f"Fell down to {self.supply_used} supply, cancelling commit")
             self._commit = False
 

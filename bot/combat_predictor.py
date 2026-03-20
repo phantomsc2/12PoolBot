@@ -53,7 +53,6 @@ class CombatPredictor:
 
     def _predict(self) -> CombatPrediction:
         n = len(self.units)
-        len(self.enemy_units)
 
         units = list(chain(self.units, self.enemy_units))
 

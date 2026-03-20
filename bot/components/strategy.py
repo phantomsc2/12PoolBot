@@ -15,8 +15,9 @@ UnitComposition: TypeAlias = dict[UnitTypeId, dict[str, float | int]]
 class StrategyDecision:
     morph_drone: bool
     army_composition: UnitComposition
-    vespene_target: int
-    upgrades: list[UpgradeId]
+    gas_count: int
+    tech_targets: list[UnitTypeId]
+    upgrade_targets: list[UpgradeId]
 
 
 class Strategy(Component):
@@ -39,10 +40,12 @@ class Strategy(Component):
         )
 
         mutalisk_switch = self.enemy_structures.flying and not self.enemy_structures.not_flying
+        go_upgrades = self.townhalls.amount >= 3 and self.workers.amount >= 32
 
         composition: UnitComposition = {}
         if mutalisk_switch:
-            composition[UnitTypeId.MUTALISK] = {"proportion": 1.0, "priority": 1}
+            composition[UnitTypeId.MUTALISK] = {"proportion": 0.5, "priority": 1}
+            composition[UnitTypeId.ZERGLING] = {"proportion": 0.5, "priority": 1}
         elif (
             not self.larva.exists
             and not cy_unit_pending(self, UnitTypeId.QUEEN)
@@ -52,16 +55,36 @@ class Strategy(Component):
         else:
             composition[UnitTypeId.ZERGLING] = {"proportion": 1.0, "priority": 1}
 
-        early_game = not self.build_order_runner.build_completed
-        mine_gas_for_speed = not self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED)
-        mine_gas = early_game or mine_gas_for_speed or mutalisk_switch
-        vespene_target = 3 if mine_gas else 0
+        if not self.build_order_runner.build_completed or not self.already_pending_upgrade(
+            UpgradeId.ZERGLINGMOVEMENTSPEED
+        ):
+            gas_count = 1
+        elif mutalisk_switch or (go_upgrades and self.structures(UnitTypeId.EVOLUTIONCHAMBER).idle.exists):
+            gas_count = self.workers.amount // 11
+        else:
+            gas_count = 0
 
-        upgrades = [UpgradeId.ZERGLINGMOVEMENTSPEED]
+        upgrade_targets: set[UpgradeId] = set()
+        tech_targets: set[UnitTypeId] = set()
+        upgrade_targets.add(UpgradeId.ZERGLINGMOVEMENTSPEED)
+
+        if go_upgrades:
+            upgrade_targets.add(UpgradeId.ZERGMELEEWEAPONSLEVEL1)
+            if UpgradeId.ZERGMELEEWEAPONSLEVEL1 in self.state.upgrades:
+                tech_targets.add(UnitTypeId.LAIR)
+                upgrade_targets.add(UpgradeId.ZERGMELEEWEAPONSLEVEL2)
+            if UpgradeId.ZERGMELEEWEAPONSLEVEL2 in self.state.upgrades:
+                tech_targets.add(UnitTypeId.INFESTATIONPIT)
+                tech_targets.add(UnitTypeId.HIVE)
+                upgrade_targets.add(UpgradeId.ZERGMELEEWEAPONSLEVEL3)
+        if mutalisk_switch:
+            tech_targets.add(UnitTypeId.LAIR)
+            tech_targets.add(UnitTypeId.SPIRE)
 
         return StrategyDecision(
             morph_drone=should_drone,
             army_composition=composition,
-            vespene_target=vespene_target,
-            upgrades=upgrades,
+            gas_count=gas_count,
+            tech_targets=list(tech_targets),
+            upgrade_targets=list(upgrade_targets),
         )

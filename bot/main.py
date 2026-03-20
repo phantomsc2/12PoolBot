@@ -11,6 +11,7 @@ from ares.behaviors.macro import (
     MacroPlan,
     Mining,
     SpawnController,
+    TechUp,
     UpgradeController,
 )
 from leitwerk import OptimizerSession
@@ -76,7 +77,7 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         for action in micro_actions:
             await action.execute(self)
 
-        self.register_behavior(Mining(workers_per_gas=strategy.vespene_target))
+        self.register_behavior(Mining(workers_per_gas=3 if strategy.gas_count > 0 else 0))
 
         if self.build_order_runner.build_completed:
             macro = self._macro(strategy)
@@ -104,12 +105,14 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         macro_plan = MacroPlan()
         if self.supply_left == 0:
             macro_plan.add(AutoSupply(self.start_location))
+        macro_plan.add(GasBuildingController(to_count=strategy.gas_count))
+        macro_plan.add(UpgradeController(strategy.upgrade_targets, self.start_location))
+        for tech in strategy.tech_targets:
+            macro_plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
         if strategy.morph_drone:
             macro_plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
         else:
             macro_plan.add(SpawnController(army_composition_dict=strategy.army_composition))
         if self.can_afford(UnitTypeId.HATCHERY) and self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
             macro_plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
-        macro_plan.add(GasBuildingController(to_count=1))
-        macro_plan.add(UpgradeController(strategy.upgrades, self.start_location))
         return macro_plan
