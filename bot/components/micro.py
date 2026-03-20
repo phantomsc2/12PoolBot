@@ -80,14 +80,10 @@ class Micro(Component):
         retreat_center = _medoid(retreat_targets)
         retreat_targets.sort(key=lambda t: t.distance_to(retreat_center))
 
-        attack_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(attack_targets))
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
         action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
-            p = unit.position.rounded
-            attack_path_limit = 3
-            attack_path = attack_pathing.get_path(p, attack_path_limit)
             outcome = combat.prediction.outcome_for[unit.tag]
             confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
 
@@ -103,13 +99,10 @@ class Micro(Component):
                 combat_action = CombatAction.Runby
 
             if combat_action == CombatAction.Attack:
-                if len(attack_path) < 2:
-                    action = AttackMove(unit, Point2(target))
-                else:
-                    action = AttackMove(unit, Point2(attack_path[-1]).offset(HALF))
+                action = AttackMove(unit, Point2(target))
             elif combat_action == CombatAction.Retreat:
                 retreat_path_limit = 3
-                retreat_path = retreat_pathing.get_path(p, retreat_path_limit)
+                retreat_path = retreat_pathing.get_path(unit.position, retreat_path_limit)
                 if len(retreat_path) < 2:
                     action = Move(unit, Point2(retreat_target))
                 elif len(retreat_path) < retreat_path_limit:
