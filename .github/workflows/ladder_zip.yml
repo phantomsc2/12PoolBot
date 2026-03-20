@@ -26,7 +26,7 @@ jobs:
       - name: Update pip
         run: poetry run pip install -U pip
       - name: Install requirements
-        run: poetry install --no-root
+        run: poetry install --no-root --with dev
       - name: Run checks
         run: make check
       - name: Save commit hash

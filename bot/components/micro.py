@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import chain, cycle
@@ -6,15 +6,19 @@ from typing import Annotated
 
 import numpy as np
 from ares.consts import EngagementResult
-from cython_extensions.dijkstra import cy_dijkstra
+from cython_extensions import cy_distance_to
+from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
 from leitwerk import Parameter
+from loguru import logger
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
+from sc2.unit import Unit
+from scipy.spatial.distance import pdist, squareform
 
-from ..action import Action, AttackMove, HoldPosition, Move, UseAbility
-from ..combat_predictor import CombatPredictor
-from .component import Component
+from bot.action import Action, AttackMove, Move, UseAbility
+from bot.combat_predictor import CombatPredictor
+from bot.components.component import Component
 
 Point = tuple[int, int]
 HALF = Point2((0.5, 0.5))
@@ -22,7 +26,7 @@ HALF = Point2((0.5, 0.5))
 
 class CombatAction(Enum):
     Attack = auto()
-    Hold = auto()
+    Runby = auto()
     Retreat = auto()
 
 
@@ -40,22 +44,23 @@ class Micro(Component):
         self.commit_at_supply = 100
         self.commit_cancel_at_supply = 50
 
-    def micro(
-        self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int, params: MicroParams
-    ) -> Iterable[Action]:
+    def micro(self, combat: CombatPredictor, params: MicroParams) -> Iterable[Action]:
 
         if self.supply_used > self.commit_at_supply:
+            logger.info(f"Reached {self.supply_used} supply, committing hard")
             self._commit = True
         elif self.supply_used < self.commit_cancel_at_supply:
+            logger.info(f"Fell down to {self.supply_used} supply, cancelling commit")
             self._commit = False
 
+        runby = self._runby_pathing()
         return chain(
-            self.micro_army(combat, pathing, supply_used, params),
+            self.micro_army(combat, runby, params),
             self.micro_queens(),
         )
 
     def micro_army(
-        self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int, params: MicroParams
+        self, combat: CombatPredictor, runby_pathing: DijkstraPathing, params: MicroParams
     ) -> Iterable[Action]:
         units = sorted(self.units({UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.MUTALISK}), key=lambda u: u.tag)
         target_units = sorted(combat.enemy_units.not_flying, key=lambda u: u.tag)
@@ -68,21 +73,15 @@ class Micro(Component):
             return
 
         attack_targets = [u.position for u in target_units]
-        attack_center = Point2(np.median(np.array(attack_targets), axis=0))
+        attack_center = _medoid(attack_targets)
         attack_targets.sort(key=lambda t: t.distance_to(attack_center), reverse=True)
 
         retreat_targets = [w.position for w in civilians]
-        retreat_center = Point2(np.median(np.array(retreat_targets), axis=0))
+        retreat_center = _medoid(retreat_targets)
         retreat_targets.sort(key=lambda t: t.distance_to(retreat_center))
 
-        attack_pathing = cy_dijkstra(
-            pathing,
-            np.array(attack_targets, dtype=np.intp),
-        )
-        retreat_pathing = cy_dijkstra(
-            pathing,
-            np.array(retreat_targets, dtype=np.intp),
-        )
+        attack_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(attack_targets))
+        retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
         action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
@@ -94,10 +93,14 @@ class Micro(Component):
 
             if self._commit or outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
                 combat_action = CombatAction.Attack
-            elif pathing[p] > 1:
+            elif not self.mediator.is_position_safe(
+                grid=self.mediator.get_ground_grid,
+                position=unit.position,
+                weight_safety_limit=1.0,
+            ):
                 combat_action = CombatAction.Retreat
             else:
-                combat_action = CombatAction.Hold
+                combat_action = CombatAction.Runby
 
             if combat_action == CombatAction.Attack:
                 if len(attack_path) < 2:
@@ -114,7 +117,12 @@ class Micro(Component):
                 else:
                     action = Move(unit, Point2(retreat_path[-1]).offset(HALF))
             else:
-                action = HoldPosition(unit)
+                runby_path = runby_pathing.get_path(unit.position, 3)
+                runby_point = Point2(runby_path[-1])
+                if cy_distance_to(unit.position, runby_point) < 1:
+                    action = AttackMove(unit, runby_point)
+                else:
+                    action = Move(unit, runby_point)
 
             is_repeated = action == self._action_cache.get(unit.tag, None)
             if action and not is_repeated:
@@ -146,3 +154,43 @@ class Micro(Component):
             if self.in_pathing_grid(target) and not self.is_visible(target):
                 return target
         return sample()
+
+    def _runby_pathing(self) -> DijkstraPathing:
+        targets: set[tuple[int, int]] = set()
+        for structure in self.enemy_structures:
+            targets.update(_structure_perimeter(structure))
+        for worker in self.enemy_workers:
+            targets.add(worker.position.rounded)
+        if not targets:
+            targets.add(self.enemy_start_locations[0].rounded)
+        cost = self.mediator.get_ground_grid
+        target_array = np.atleast_2d(list(targets))
+        return cy_dijkstra(cost, target_array)
+
+
+def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
+    if structure.is_flying:
+        return
+    half_extent = structure.footprint_radius
+    if structure.position is None or half_extent is None:
+        return
+    x0, y0 = np.subtract(structure.position, half_extent).astype(int) - 1
+    x1, y1 = np.add(structure.position, half_extent).astype(int)
+
+    for x in range(x0, x1 + 1):
+        yield x, y0
+        yield x, y1
+
+    for y in range(y0 + 1, y0):
+        yield x0, y
+        yield x1, y
+
+
+def _medoid(points: Sequence[Point2]) -> Point2:
+    distances = squareform(pdist(points), checks=False)
+    medoid_index = distances.sum(axis=1).argmin()
+    return points[medoid_index]
+
+
+def _pairwise_distances(positions: Sequence[Point2]) -> np.ndarray:
+    return squareform(pdist(positions), checks=False)

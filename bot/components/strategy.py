@@ -6,7 +6,7 @@ from sc2.ids.buff_id import BuffId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 
-from .component import Component
+from bot.components.component import Component
 
 UnitComposition: TypeAlias = dict[UnitTypeId, dict[str, float | int]]
 

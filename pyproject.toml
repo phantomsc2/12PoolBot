@@ -1,46 +1,34 @@
-[tool.poetry]
+[project]
 name = "12PoolBot"
 version = "1.0.0"
 description = ""
-authors = []
 readme = "README.md"
+requires-python = ">=3.11, <3.13"
+dependencies = [
+    "cython-extensions-sc2>=0.13.4",
+    "leitwerk @ git+https://github.com/phantomsc2/leitwerk.git",
+    "scikit-image>=0.23.2,<0.24.0",
+]
+
+[tool.poetry]
 packages = [{include = "ares-sc2/src/ares"}]
 
 [tool.poetry.dependencies]
 ares-sc2 = { path = "ares-sc2", develop = false }
-cython-extensions-sc2 = ">=0.13.4"
-python = ">=3.11, <3.13"
-black = "^24.3.0"
-isort = "^5.12.0"
-requests = "^2.32.3"
-scikit-image = "^0.23.2"
-jupyter = "^1.0.0"
-snakeviz = "^2.2.0"
-line-profiler = "^4.1.3"
-setuptools = "^70.1.0"
-torch = "^2.3.1"
-leitwerk = {git = "https://github.com/phantomsc2/leitwerk.git"}
 
 [tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
 mypy = ">=1.10,<2.0"
+requests = "^2.32.3"
 ruff = ">=0.11,<1.0"
+scipy-stubs = "^1.17.1.2"
+snakeviz = "^2.2.0"
 types-requests = "^2.32.4.20260107"
 types-pyyaml = "^6.0.12.20250915"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.flake8]
-max-line-length = 120
-
-[tool.black]
-extend-exclude = 'ares-sc2/*'
-line-length = 120
-
-[tool.isort]
-profile = "black"
-skip_glob = ["ares-sc2/*"]
 
 [tool.ruff]
 line-length = 120

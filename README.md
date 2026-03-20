@@ -9,8 +9,8 @@ The classic Zerg rush. Get lings as fast as possible and upgrade speed behind.
 Intended as a practice dummy, it does not tech up or transition.
 It slowly mixes in drones and expansions though, so the flood keeps coming until you push it back!
 
-Copying, modifying and antagonizing 12PoolBot is permitted and encouraged.
-Before you upload to the ladder, make sure to make some meaningful modifications, as per [AIArena guidelines](https://aiarena.net/wiki/bot-development/getting-started/#wiki-toc-using-existing-bots-as-a-reference-or-starting-point).
+Feel free to copy, modify and antagonize 12PoolBot.
+Before you upload to the ladder, make sure to make some meaningful modifications, see [AIArena guidelines](https://aiarena.net/wiki/bot-development/getting-started/#wiki-toc-using-existing-bots-as-a-reference-or-starting-point).
 
 # Built With
 
