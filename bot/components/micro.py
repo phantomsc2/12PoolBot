@@ -36,10 +36,19 @@ class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
         self._action_cache: dict[int, Action] = {}
+        self._commit = False
+        self.commit_at_supply = 100
+        self.commit_cancel_at_supply = 50
 
     def micro(
         self, combat: CombatPredictor, pathing: np.ndarray, supply_used: int, params: MicroParams
     ) -> Iterable[Action]:
+
+        if self.supply_used > self.commit_at_supply:
+            self._commit = True
+        elif self.supply_used < self.commit_cancel_at_supply:
+            self._commit = False
+
         return chain(
             self.micro_army(combat, pathing, supply_used, params),
             self.micro_queens(),
@@ -83,7 +92,7 @@ class Micro(Component):
             outcome = combat.prediction.outcome_for[unit.tag]
             confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
 
-            if outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
+            if self._commit or outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
                 combat_action = CombatAction.Attack
             elif pathing[p] > 1:
                 combat_action = CombatAction.Retreat
