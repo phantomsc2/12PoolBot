@@ -27,6 +27,7 @@ from bot.consts import (
     PARAMS_FILE,
     VERSION_FILE,
 )
+from overlord_drop import OverlordDrop
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,17 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
             version = VERSION_FILE.read_text()
             logger.info(f"{version=}")
 
+        escalator = OverlordDrop.find_escalator_point(self)
+        self.overlord_drop = OverlordDrop(escalator)
+
+        # await self.client.debug_create_unit(
+        #     [
+        #         [UnitTypeId.OVERLORDTRANSPORT, 1, self.game_info.map_center, 1],
+        #         [UnitTypeId.ZERGLING, 8, self.game_info.map_center, 1],
+        #         [UnitTypeId.LAIR, 1, self.mediator.get_own_nat, 1],
+        #     ]
+        # )
+
     async def on_step(self, iteration: int) -> None:
         await super().on_step(iteration)
 
@@ -70,6 +82,18 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
 
         if self.build_order_runner.build_completed:
             self._macro(strategy)
+
+        self.overlord_drop.on_step(self, strategy.dropperlord_count)
+
+        if (
+            self.structure_type_build_progress(UnitTypeId.LAIR) == 1.0
+            and self.units({UnitTypeId.OVERLORDTRANSPORT, UnitTypeId.TRANSPORTOVERLORDCOCOON}).amount
+            < strategy.dropperlord_count
+            and self.can_afford(UnitTypeId.OVERLORDTRANSPORT)
+        ):
+            overlords = self.units(UnitTypeId.OVERLORD)
+            if overlords.exists:
+                overlords.closest_to(self.enemy_start_locations[0]).train(UnitTypeId.OVERLORDTRANSPORT)
 
     async def on_end(self, game_result: Result) -> None:
         await super().on_end(game_result)

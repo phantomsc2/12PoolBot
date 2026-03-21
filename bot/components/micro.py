@@ -8,7 +8,7 @@ from typing import Annotated
 import numpy as np
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import AMove, UseAbility
-from ares.consts import EngagementResult
+from ares.consts import EngagementResult, UnitRole
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
 from leitwerk import Parameter
@@ -55,15 +55,22 @@ class Micro(Component):
             logger.info(f"Fell down to {self.supply_used} supply, cancelling commit")
             self._commit = False
 
-        runby = self._runby_pathing()
-
-        self._micro_army(combat, runby, params)
+        self._micro_army(combat, params)
         self._micro_queens()
 
-    def _micro_army(self, combat: CombatPredictor, runby_pathing: DijkstraPathing, params: MicroParams) -> None:
-        units = sorted(self.units({UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.MUTALISK}), key=lambda u: u.tag)
+    def _micro_army(self, combat: CombatPredictor, params: MicroParams) -> None:
+        passengers = self.mediator.get_unit_role_dict[UnitRole.ATTACKING_TRANSPORT_SQUAD]
+
+        def is_fighter(unit: Unit) -> bool:
+            return (
+                unit.type_id in {UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.MUTALISK}
+                and unit.tag not in passengers
+            )
+
+        units = sorted(filter(is_fighter, self.units), key=lambda u: u.tag)
         target_units = sorted(combat.enemy_units.not_flying, key=lambda u: u.tag)
         civilians = self.workers
+        runby_pathing = self._runby_pathing()
 
         action_interval = max(1, math.ceil(len(units) / MAX_MICRO_ACTIONS))
         if action_interval > 1:

@@ -16,6 +16,7 @@ class StrategyDecision:
     morph_drone: bool
     army_composition: UnitComposition
     gas_count: int
+    dropperlord_count: int
     tech_targets: list[UnitTypeId]
     upgrade_targets: list[UpgradeId]
 
@@ -42,6 +43,7 @@ class Strategy(Component):
         mutalisk_switch = self.enemy_structures.flying and not self.enemy_structures.not_flying
         go_upgrades = self.townhalls.amount >= 3 and self.workers.amount >= 32
         make_banes = False
+        dropperlord_count = 1 if self.townhalls.amount >= 2 and self.workers.amount >= 16 else 0
 
         composition: UnitComposition = {}
         if mutalisk_switch:
@@ -69,6 +71,14 @@ class Strategy(Component):
             gas_count = self.workers.amount // 11
         else:
             gas_count = 0
+        if (
+            self.units({UnitTypeId.OVERLORDTRANSPORT, UnitTypeId.TRANSPORTOVERLORDCOCOON}).amount < dropperlord_count
+            and self.vespene < 25
+            and self.structure_type_build_progress(UnitTypeId.LAIR) == 1.0
+        ):
+            gas_count = max(1, gas_count)
+        if dropperlord_count > 0 and self.structure_type_build_progress(UnitTypeId.LAIR) == 0.0 and self.vespene < 100:
+            gas_count = max(1, gas_count)
 
         upgrade_targets: set[UpgradeId] = set()
         tech_targets: set[UnitTypeId] = set()
@@ -88,11 +98,14 @@ class Strategy(Component):
             # tech_targets.add(UnitTypeId.SPIRE)
         if make_banes:
             tech_targets.add(UnitTypeId.BANELINGNEST)
+        if dropperlord_count > 0:
+            tech_targets.add(UnitTypeId.LAIR)
 
         return StrategyDecision(
             morph_drone=should_drone,
             army_composition=composition,
             gas_count=gas_count,
+            dropperlord_count=dropperlord_count,
             tech_targets=list(tech_targets),
             upgrade_targets=list(upgrade_targets),
         )
