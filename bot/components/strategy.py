@@ -52,7 +52,7 @@ class Strategy(Component):
         elif (
             not self.larva.exists
             and not cy_unit_pending(self, UnitTypeId.QUEEN)
-            and self.mediator.get_own_unit_count(unit_type_id=UnitTypeId.QUEEN) < self.townhalls.amount
+            and self.mediator.get_own_unit_count(unit_type_id=UnitTypeId.QUEEN) < self.townhalls.ready.amount
         ):
             composition[UnitTypeId.QUEEN] = {"proportion": 1.0, "priority": 1}
         elif make_banes:

@@ -121,10 +121,18 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         plan.add(UpgradeController(strategy.upgrade_targets, self.start_location))
         for tech in strategy.tech_targets:
             plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
-        if strategy.morph_drone:
-            plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
+        if (
+            UnitTypeId.LAIR in strategy.tech_targets
+            and self.vespene >= 100
+            and self.structure_type_build_progress(UnitTypeId.LAIR) == 0.0
+        ):
+            # prioritize lair
+            pass
         else:
-            plan.add(SpawnController(army_composition_dict=strategy.army_composition))
-        if self.can_afford(UnitTypeId.HATCHERY) and self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
-            plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
+            if strategy.morph_drone:
+                plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
+            else:
+                plan.add(SpawnController(army_composition_dict=strategy.army_composition))
+            if self.can_afford(UnitTypeId.HATCHERY) and self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
+                plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
         self.register_behavior(plan)

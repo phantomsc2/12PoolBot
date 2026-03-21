@@ -59,7 +59,12 @@ class OverlordDropState:
             if passengers_needed > 0:
                 self._assign_passengers(bot, passengers_needed, dropperlord.position)
 
-            if len(passengers_on_map) > 0:
+            if bot.get_terrain_height(dropperlord) == target_height:
+                # move to low ground
+                bot.register_behavior(
+                    MoveToSafeTarget(unit=dropperlord, grid=bot.mediator.get_air_grid, target=bot.game_info.map_center)
+                )
+            elif len(passengers_on_map) > 0:
                 # load passengers
                 closest_passenger = cy_closest_to(dropperlord.position, passengers_on_map)
                 if cy_distance_to(dropperlord.position, self._escalator) < self._load_distance:
@@ -73,9 +78,7 @@ class OverlordDropState:
                         unit.smart(dropperlord)
                     else:
                         bot.register_behavior(
-                            PathUnitToTarget(
-                                unit=dropperlord, grid=bot.mediator.get_ground_grid, target=dropperlord.position
-                            )
+                            PathUnitToTarget(unit=unit, grid=bot.mediator.get_ground_grid, target=dropperlord.position)
                         )
             elif dropperlord.cargo_left == 0 and dropperlord.cargo_max > 0:
                 logger.info(f"{dropperlord=} fully loaded")
@@ -107,8 +110,14 @@ class OverlordDropState:
         self._passenger_tags.discard(tag)
 
     def _is_candidate(self, bot: AresBot, unit: Unit) -> bool:
-        return unit.type_id == self._passenger_type and bot.get_terrain_height(unit) < bot.get_terrain_height(
-            self._target
+        return (
+            unit.type_id == self._passenger_type
+            and bot.get_terrain_height(unit) < bot.get_terrain_height(self._target)
+            and bot.mediator.is_position_safe(
+                grid=bot.mediator.get_ground_grid,
+                position=unit.position,
+                weight_safety_limit=1.0,
+            )
         )
 
     def _assign_passengers(self, bot: AresBot, count: int, near: Point2) -> None:
