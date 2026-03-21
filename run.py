@@ -8,10 +8,6 @@ from sc2.data import AIBuild, Difficulty, Race
 from sc2.main import run_game
 from sc2.player import Bot, Computer
 
-sys.path.append("ares-sc2/src/ares")
-sys.path.append("ares-sc2/src")
-sys.path.append("ares-sc2")
-
 import yaml
 from bot.main import TwelvePoolBot
 from ladder import run_ladder_game

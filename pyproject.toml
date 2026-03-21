@@ -4,17 +4,16 @@ version = "1.0.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.11, <3.13"
-dependencies = [
-    "cython-extensions-sc2>=0.13.4",
-    "leitwerk @ git+https://github.com/phantomsc2/leitwerk.git",
-    "scikit-image>=0.23.2,<0.24.0",
-]
 
 [tool.poetry]
-packages = [{include = "ares-sc2/src/ares"}]
+packages = [{ include = "bot" }]
 
 [tool.poetry.dependencies]
+python = ">=3.11, <3.13"
 ares-sc2 = { path = "ares-sc2", develop = false }
+cython-extensions-sc2 = ">=0.13.4"
+leitwerk = { git = "https://github.com/phantomsc2/leitwerk.git" }
+scikit-image = ">=0.23.2,<0.24.0"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"

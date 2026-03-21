@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from ares.consts import ALL_STRUCTURES, CHANGELING_TYPES
-from sc2.constants import WORKER_TYPES, abilityid_to_unittypeid
+from ares.consts import ALL_STRUCTURES, CHANGELING_TYPES, WORKER_TYPES
+from sc2.constants import abilityid_to_unittypeid
 from sc2.ids.unit_typeid import UnitTypeId
 
 ALL_UNITS = ALL_STRUCTURES | set(abilityid_to_unittypeid.values())

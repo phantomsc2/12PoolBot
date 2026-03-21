@@ -27,7 +27,7 @@ from bot.consts import (
     PARAMS_FILE,
     VERSION_FILE,
 )
-from overlord_drop import OverlordDrop
+from bot.overlord_drop import OverlordDrop
 
 
 @dataclass(frozen=True)
