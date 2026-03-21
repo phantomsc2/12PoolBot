@@ -21,7 +21,7 @@ from scipy.spatial.distance import pdist, squareform
 
 from bot.combat_predictor import CombatPredictor
 from bot.components.component import Component
-from consts import MAX_MICRO_ACTIONS
+from bot.consts import MAX_MICRO_ACTIONS
 
 Point = tuple[int, int]
 HALF = Point2((0.5, 0.5))
