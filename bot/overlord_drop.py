@@ -1,5 +1,5 @@
 from ares import AresBot, UnitRole
-from ares.behaviors.combat.individual import KeepUnitSafe, MoveToSafeTarget
+from ares.behaviors.combat.individual import KeepUnitSafe, MoveToSafeTarget, PathUnitToTarget
 from cython_extensions import cy_closest_to, cy_distance_to, cy_flood_fill_grid, cy_sorted_by_distance_to
 from loguru import logger
 from sc2.ids.ability_id import AbilityId
@@ -18,8 +18,8 @@ class OverlordDropState:
         self._passenger_tags: set[int] = set()
         self._passenger_type = passenger_type
         self._passenger_role = UnitRole.ATTACKING_TRANSPORT_SQUAD
-        self._load_distance = 12.0
-        self._unload_distance = 3.0
+        self._load_distance = 12.0  # stay this close to escalator point during loading
+        self._unload_distance = 3.0  # stay this close to escalator point during unloading
         self._fully_loaded = False
 
     def on_step(self, bot: AresBot) -> bool:
@@ -34,7 +34,11 @@ class OverlordDropState:
             position=dropperlord.position,
             weight_safety_limit=1.0,
         ):
-            bot.register_behavior(KeepUnitSafe(unit=dropperlord, grid=bot.mediator.get_air_grid))
+            if dropperlord.health_percentage < 0.2 and bot.in_pathing_grid(dropperlord):
+                # emergency evacuation
+                dropperlord(AbilityId.UNLOADALLAT_OVERLORD, dropperlord.position)
+            else:
+                bot.register_behavior(KeepUnitSafe(unit=dropperlord, grid=bot.mediator.get_air_grid))
             return True
 
         passengers_on_map: list[Unit] = []
@@ -56,9 +60,8 @@ class OverlordDropState:
                 self._assign_passengers(bot, passengers_needed, dropperlord.position)
 
             if len(passengers_on_map) > 0:
-                # pick up passengers
+                # load passengers
                 closest_passenger = cy_closest_to(dropperlord.position, passengers_on_map)
-                # dropperlord.smart(closest_passenger)
                 if cy_distance_to(dropperlord.position, self._escalator) < self._load_distance:
                     dropperlord.smart(closest_passenger)
                 else:
@@ -66,13 +69,20 @@ class OverlordDropState:
                         MoveToSafeTarget(unit=dropperlord, grid=bot.mediator.get_air_grid, target=self._escalator)
                     )
                 for unit in passengers_on_map:
-                    unit.smart(dropperlord)
+                    if cy_distance_to(unit.position, dropperlord.position) < 1:
+                        unit.smart(dropperlord)
+                    else:
+                        bot.register_behavior(
+                            PathUnitToTarget(
+                                unit=dropperlord, grid=bot.mediator.get_ground_grid, target=dropperlord.position
+                            )
+                        )
             elif dropperlord.cargo_left == 0 and dropperlord.cargo_max > 0:
                 logger.info(f"{dropperlord=} fully loaded")
                 self._fully_loaded = True
 
         else:
-            # unload
+            # unload at target
             for unit in passengers_on_map:
                 self._unassign_passenger(bot, unit.tag)
             if dropperlord.cargo_used == 0:
@@ -81,8 +91,9 @@ class OverlordDropState:
             elif bot.get_terrain_height(dropperlord) == target_height and bot.in_pathing_grid(dropperlord):
                 dropperlord(AbilityId.UNLOADALLAT_OVERLORD, dropperlord.position)
             elif cy_distance_to(dropperlord.position, self._escalator) < self._unload_distance:
+                # force the overlord in towards pathable ground
                 bot.register_behavior(
-                    MoveToSafeTarget(unit=dropperlord, grid=bot.mediator.get_air_grid, target=self._target)
+                    PathUnitToTarget(unit=dropperlord, grid=bot.mediator.get_air_grid, target=self._target)
                 )
             else:
                 bot.register_behavior(
