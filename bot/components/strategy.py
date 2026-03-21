@@ -41,6 +41,7 @@ class Strategy(Component):
 
         mutalisk_switch = self.enemy_structures.flying and not self.enemy_structures.not_flying
         go_upgrades = self.townhalls.amount >= 3 and self.workers.amount >= 32
+        make_banes = False
 
         composition: UnitComposition = {}
         if mutalisk_switch:
@@ -52,6 +53,9 @@ class Strategy(Component):
             and self.mediator.get_own_unit_count(unit_type_id=UnitTypeId.QUEEN) < self.townhalls.amount
         ):
             composition[UnitTypeId.QUEEN] = {"proportion": 1.0, "priority": 1}
+        elif make_banes:
+            composition[UnitTypeId.BANELING] = {"proportion": 0.5, "priority": 1}
+            composition[UnitTypeId.ZERGLING] = {"proportion": 0.5, "priority": 1}
         else:
             composition[UnitTypeId.ZERGLING] = {"proportion": 1.0, "priority": 1}
 
@@ -59,7 +63,9 @@ class Strategy(Component):
             UpgradeId.ZERGLINGMOVEMENTSPEED
         ):
             gas_count = 1
-        elif mutalisk_switch or (go_upgrades and self.structures(UnitTypeId.EVOLUTIONCHAMBER).idle.exists):
+        elif (
+            mutalisk_switch or (go_upgrades and self.structures(UnitTypeId.EVOLUTIONCHAMBER).idle.exists) or make_banes
+        ):
             gas_count = self.workers.amount // 11
         else:
             gas_count = 0
@@ -78,8 +84,10 @@ class Strategy(Component):
                 tech_targets.add(UnitTypeId.HIVE)
                 upgrade_targets.add(UpgradeId.ZERGMELEEWEAPONSLEVEL3)
         if mutalisk_switch:
-            tech_targets.add(UnitTypeId.LAIR)
-            tech_targets.add(UnitTypeId.SPIRE)
+            tech_targets.add(UnitTypeId.MUTALISK)
+            # tech_targets.add(UnitTypeId.SPIRE)
+        if make_banes:
+            tech_targets.add(UnitTypeId.BANELINGNEST)
 
         return StrategyDecision(
             morph_drone=should_drone,

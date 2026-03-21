@@ -1,4 +1,3 @@
-import random
 from dataclasses import dataclass
 
 import numpy as np
@@ -25,7 +24,6 @@ from bot.components.micro import Micro, MicroParams
 from bot.components.strategy import Strategy, StrategyDecision
 from bot.consts import (
     EXCLUDE_FROM_COMBAT,
-    MAX_MICRO_ACTIONS,
     PARAMS_FILE,
     VERSION_FILE,
 )
@@ -65,23 +63,13 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         units = self.all_own_units.exclude_type(EXCLUDE_FROM_COMBAT)
         enemy_units = self.all_enemy_units.exclude_type(EXCLUDE_FROM_COMBAT)
         predictor = CombatPredictor(self, units, enemy_units, self.params.combat_predictor)
-        micro_actions = list(self.micro(predictor, self.params.micro))
-
-        # avoid APM limit
-        max_micro_actions = MAX_MICRO_ACTIONS
-        if max_micro_actions < len(micro_actions):
-            logger.info(f"Limiting micro actions: {len(micro_actions)} => {max_micro_actions}")
-            random.shuffle(micro_actions)
-            micro_actions = micro_actions[:max_micro_actions]
-
-        for action in micro_actions:
-            await action.execute(self)
 
         self.register_behavior(Mining(workers_per_gas=3 if strategy.gas_count > 0 else 0))
 
+        self.micro(predictor, self.params.micro)
+
         if self.build_order_runner.build_completed:
-            macro = self._macro(strategy)
-            self.register_behavior(macro)
+            self._macro(strategy)
 
     async def on_end(self, game_result: Result) -> None:
         await super().on_end(game_result)
@@ -101,18 +89,18 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
             report = self.optimizer.tell(result)
             logger.info(f"{report=}")
 
-    def _macro(self, strategy: StrategyDecision) -> MacroPlan:
-        macro_plan = MacroPlan()
+    def _macro(self, strategy: StrategyDecision) -> None:
+        plan = MacroPlan()
         if self.supply_left == 0:
-            macro_plan.add(AutoSupply(self.start_location))
-        macro_plan.add(GasBuildingController(to_count=strategy.gas_count))
-        macro_plan.add(UpgradeController(strategy.upgrade_targets, self.start_location))
+            plan.add(AutoSupply(self.start_location))
+        plan.add(GasBuildingController(to_count=strategy.gas_count))
+        plan.add(UpgradeController(strategy.upgrade_targets, self.start_location))
         for tech in strategy.tech_targets:
-            macro_plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
+            plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
         if strategy.morph_drone:
-            macro_plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
+            plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
         else:
-            macro_plan.add(SpawnController(army_composition_dict=strategy.army_composition))
+            plan.add(SpawnController(army_composition_dict=strategy.army_composition))
         if self.can_afford(UnitTypeId.HATCHERY) and self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
-            macro_plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
-        return macro_plan
+            plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
+        self.register_behavior(plan)

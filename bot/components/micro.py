@@ -1,10 +1,13 @@
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
-from itertools import chain, cycle
+from itertools import cycle
 from typing import Annotated
 
 import numpy as np
+from ares.behaviors.combat import CombatManeuver
+from ares.behaviors.combat.individual import AMove, UseAbility
 from ares.consts import EngagementResult
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
@@ -16,15 +19,15 @@ from sc2.position import Point2
 from sc2.unit import Unit
 from scipy.spatial.distance import pdist, squareform
 
-from bot.action import Action, AttackMove, Move, UseAbility
 from bot.combat_predictor import CombatPredictor
 from bot.components.component import Component
+from consts import MAX_MICRO_ACTIONS
 
 Point = tuple[int, int]
 HALF = Point2((0.5, 0.5))
 
 
-class CombatAction(Enum):
+class CombatStance(Enum):
     Attack = auto()
     Runby = auto()
     Retreat = auto()
@@ -39,12 +42,11 @@ class MicroParams:
 class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
-        self._action_cache: dict[int, Action] = {}
         self._commit = False
         self.commit_at_supply = 100
         self.commit_cancel_at_supply = 50
 
-    def micro(self, combat: CombatPredictor, params: MicroParams) -> Iterable[Action]:
+    def micro(self, combat: CombatPredictor, params: MicroParams) -> None:
 
         if not self._commit and self.supply_used > self.commit_at_supply:
             logger.info(f"Reached {self.supply_used} supply, committing hard")
@@ -54,22 +56,25 @@ class Micro(Component):
             self._commit = False
 
         runby = self._runby_pathing()
-        return chain(
-            self.micro_army(combat, runby, params),
-            self.micro_queens(),
-        )
 
-    def micro_army(
-        self, combat: CombatPredictor, runby_pathing: DijkstraPathing, params: MicroParams
-    ) -> Iterable[Action]:
+        self._micro_army(combat, runby, params)
+        self._micro_queens()
+
+    def _micro_army(self, combat: CombatPredictor, runby_pathing: DijkstraPathing, params: MicroParams) -> None:
         units = sorted(self.units({UnitTypeId.ZERGLING, UnitTypeId.ROACH, UnitTypeId.MUTALISK}), key=lambda u: u.tag)
         target_units = sorted(combat.enemy_units.not_flying, key=lambda u: u.tag)
         civilians = self.workers
 
+        action_interval = max(1, math.ceil(len(units) / MAX_MICRO_ACTIONS))
+        if action_interval > 1:
+            logger.info(f"{action_interval=}")
+
         if not target_units or not civilians:
             for unit in units:
                 if unit.is_idle:
-                    yield AttackMove(unit, self.random_scout_target())
+                    maneuver = CombatManeuver()
+                    maneuver.add(AMove(unit, self.random_scout_target()))
+                    self.register_behavior(maneuver)
             return
 
         attack_targets = [u.position for u in target_units]
@@ -82,55 +87,52 @@ class Micro(Component):
 
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
-        action: Action
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
+            if (self.actual_iteration % action_interval) != (unit.tag % action_interval):
+                continue
+
+            maneuver = CombatManeuver()
             outcome = combat.prediction.outcome_for[unit.tag]
             confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
 
             if self._commit or outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
-                combat_action = CombatAction.Attack
+                stance = CombatStance.Attack
             elif not self.mediator.is_position_safe(
                 grid=self.mediator.get_ground_grid,
                 position=unit.position,
                 weight_safety_limit=1.0,
             ):
-                combat_action = CombatAction.Retreat
+                stance = CombatStance.Retreat
             else:
-                combat_action = CombatAction.Runby
+                stance = CombatStance.Runby
 
-            if combat_action == CombatAction.Attack:
-                action = AttackMove(unit, Point2(target))
-            elif combat_action == CombatAction.Retreat:
+            if stance == CombatStance.Attack:
+                maneuver.add(AMove(unit, target))
+            elif stance == CombatStance.Retreat:
                 retreat_path_limit = 3
                 retreat_path = retreat_pathing.get_path(unit.position, retreat_path_limit)
-                if len(retreat_path) < 2:
-                    action = Move(unit, Point2(retreat_target))
-                elif len(retreat_path) < retreat_path_limit:
-                    action = AttackMove(unit, Point2(retreat_path[-1]).offset(HALF))
-                else:
-                    action = Move(unit, Point2(retreat_path[-1]).offset(HALF))
+                retreat_target = Point2(retreat_path[-1]).offset(HALF)
+                maneuver.add(UseAbility(AbilityId.MOVE_MOVE, unit, retreat_target))
             else:
                 runby_path = runby_pathing.get_path(unit.position, 3)
                 runby_point = Point2(runby_path[-1])
                 if cy_distance_to(unit.position, runby_point) < 1:
-                    action = AttackMove(unit, runby_point)
+                    maneuver.add(AMove(unit, runby_point))
                 else:
-                    action = Move(unit, runby_point)
+                    maneuver.add(UseAbility(AbilityId.MOVE_MOVE, unit, runby_point))
+            self.register_behavior(maneuver)
 
-            is_repeated = action == self._action_cache.get(unit.tag, None)
-            if action and not is_repeated:
-                self._action_cache[unit.tag] = action
-                yield action
-
-    def micro_queens(self) -> Iterable[Action]:
+    def _micro_queens(self) -> None:
         queens = sorted(self.mediator.get_own_army_dict[UnitTypeId.QUEEN], key=lambda u: u.tag)
         hatcheries = sorted(self.townhalls, key=lambda u: u.distance_to(self.start_location))
         for queen, hatchery in zip(queens, hatcheries, strict=False):
+            maneuver = CombatManeuver()
             queen_position = hatchery.position.towards(self.game_info.map_center, queen.radius + hatchery.radius)
             if queen.energy >= 25 and hatchery.is_ready:
-                yield UseAbility(queen, AbilityId.EFFECT_INJECTLARVA, hatchery)
+                maneuver.add(UseAbility(AbilityId.EFFECT_INJECTLARVA, queen, hatchery))
             elif queen.distance_to(queen_position) > 1:
-                yield AttackMove(queen, queen_position)
+                maneuver.add(UseAbility(AbilityId.ATTACK, queen, hatchery))
+            self.register_behavior(maneuver)
 
     def random_scout_target(self, num_attempts=10) -> Point2:
         def sample() -> Point2:
