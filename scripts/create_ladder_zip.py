@@ -60,7 +60,7 @@ else:
 
 ZIP_DIRECTORIES: dict[str, dict] = {
     "bot": {"zip_all": True, "folder_to_zip": "bot"},
-    "ares-sc2": {"zip_all": True, "folder_to_zip": ""},
+    "ares-sc2/src/ares": {"zip_all": True, "folder_to_zip": ""},
     "python-sc2": {"zip_all": False, "folder_to_zip": "sc2"},
     # "sc2_helper": {"zip_all": True, "folder_to_zip": "sc2_helper"},
     "SC2MapAnalysis": {"zip_all": False, "folder_to_zip": "map_analyzer"},
@@ -285,6 +285,12 @@ if __name__ == "__main__":
     if os.path.exists(destination_directory):
         shutil.rmtree(destination_directory, onerror=on_error)
     destination_directory = os.path.join("./", "SC2MapAnalysis")
+    if os.path.exists(destination_directory):
+        shutil.rmtree(destination_directory, onerror=on_error)
+    destination_directory = os.path.join("./", "leitwerk")
+    if os.path.exists(destination_directory):
+        shutil.rmtree(destination_directory, onerror=on_error)
+    destination_directory = os.path.join("./", "cython-extensions-sc2")
     if os.path.exists(destination_directory):
         shutil.rmtree(destination_directory, onerror=on_error)
 
