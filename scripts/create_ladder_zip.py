@@ -62,7 +62,7 @@ ZIP_DIRECTORIES: dict[str, dict] = {
     "bot": {"zip_all": True, "folder_to_zip": "bot"},
     "ares-sc2/src/ares": {"zip_all": True, "folder_to_zip": ""},
     "python-sc2": {"zip_all": False, "folder_to_zip": "sc2"},
-    # "sc2_helper": {"zip_all": True, "folder_to_zip": "sc2_helper"},
+    "ares-sc2/sc2_helper": {"zip_all": True, "folder_to_zip": ""},
     "SC2MapAnalysis": {"zip_all": False, "folder_to_zip": "map_analyzer"},
     "cython-extensions-sc2": {"zip_all": False, "folder_to_zip": "cython_extensions"},
     "leitwerk/leitwerk": {"zip_all": True, "folder_to_zip": ""},
