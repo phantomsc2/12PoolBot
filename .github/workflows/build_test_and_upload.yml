@@ -7,7 +7,7 @@ on:
       - main
 
 env:
-  ZIP_FILE: bot.zip
+  ZIP_FILE: 12PoolBot.zip
   ZIP_ARTIFACT_NAME: ladder-zip
   ZIP_STAGING_DIR: ladder-zip
 
@@ -83,7 +83,7 @@ jobs:
       - name: Install requirements
         run: poetry install --no-root
       - name: Run test game
-        run: poetry run python scripts/run_test_game.py
+        run: poetry run python -m scripts.run_test_game
       - name: Upload Replay
         uses: actions/upload-artifact@v6
         with:
