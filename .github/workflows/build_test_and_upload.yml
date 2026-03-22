@@ -9,6 +9,7 @@ on:
 env:
   ZIP_FILE: bot.zip
   ZIP_ARTIFACT_NAME: ladder-zip
+  ZIP_STAGING_DIR: ladder-zip
 
 jobs:
   build:
@@ -43,11 +44,17 @@ jobs:
         run: poetry run python scripts/write_commit_to_file.py
       - name: Compile ladder zip
         run: poetry run python scripts/create_ladder_zip.py
+      - name: Unpack ladder zip for artifact upload
+        run: |
+          rm -rf "${ZIP_STAGING_DIR}"
+          mkdir -p "${ZIP_STAGING_DIR}"
+          unzip -qq "${ZIP_FILE}" -d "${ZIP_STAGING_DIR}"
       - name: Upload Bot Zip
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ZIP_ARTIFACT_NAME }}
-          path: ${{ env.ZIP_FILE }}
+          path: ${{ env.ZIP_STAGING_DIR }}
+          compression-level: 9
           if-no-files-found: error
 
   run_test_game:
@@ -107,6 +114,7 @@ jobs:
         with:
           name: ${{ env.ZIP_ARTIFACT_NAME }}
           path: bot_artifact
+          skip-decompress: true
       - name: Upload to AIArena
         env:
           UPLOAD_API_TOKEN: ${{ secrets.UPLOAD_API_TOKEN }}
@@ -117,7 +125,7 @@ jobs:
             --retry-all-errors \
             -X PATCH \
             -H "Authorization: Token ${UPLOAD_API_TOKEN}" \
-            -F "bot_zip=@bot_artifact/${ZIP_FILE};type=application/zip" \
+            -F "bot_zip=@bot_artifact/${ZIP_ARTIFACT_NAME}.zip;type=application/zip" \
             -F "bot_zip_publicly_downloadable=true" \
             -F "bot_data_publicly_downloadable=true" \
             -F "bot_data_enabled=true" \
