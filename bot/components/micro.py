@@ -42,18 +42,8 @@ class MicroParams:
 class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
-        self._commit = False
-        self.commit_at_supply = 100
-        self.commit_cancel_at_supply = 50
 
     def micro(self, combat: CombatPredictor, params: MicroParams) -> None:
-
-        if not self._commit and self.supply_used > self.commit_at_supply:
-            logger.info(f"Reached {self.supply_used} supply, committing hard")
-            self._commit = True
-        if self._commit and self.supply_used < self.commit_cancel_at_supply:
-            logger.info(f"Fell down to {self.supply_used} supply, cancelling commit")
-            self._commit = False
 
         self._micro_army(combat, params)
         self._micro_queens()
@@ -102,7 +92,7 @@ class Micro(Component):
             outcome = combat.prediction.outcome_for[unit.tag]
             confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
 
-            if self._commit or outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
+            if outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
                 stance = CombatStance.Attack
             elif not self.mediator.is_position_safe(
                 grid=self.mediator.get_ground_grid,
