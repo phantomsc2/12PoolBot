@@ -15,7 +15,7 @@ from subprocess import Popen, run
 import yaml
 
 MY_BOT_NAME: str = "MyBotName"
-ZIPFILE_NAME: str = "bot.zip"
+ZIPFILE_NAME: str = "12PoolBot.zip"
 
 CONFIG_FILE: str = "config.yml"
 ZIP_FILES: list[str] = [
