@@ -9,7 +9,7 @@ from sc2.main import run_game
 from sc2.player import Bot, Computer
 
 import yaml
-from bot.main import TwelvePoolBot
+from bot import TwelvePoolBot
 from ladder import run_ladder_game
 
 # change if non default setup / linux

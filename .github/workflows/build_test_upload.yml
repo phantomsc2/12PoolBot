@@ -1,0 +1,123 @@
+name: Build, Test and Upload
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  ZIP_FILE: bot.zip
+  ZIP_ARTIFACT_NAME: ladder-zip
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Configure git defaults
+        run: |
+          # actions/checkout initializes an empty repo first; setting the default branch avoids
+          # noisy git init hints without affecting checkout behavior.
+          git config --global init.defaultBranch main
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: poetry
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Install requirements
+        run: poetry install --no-root --with dev
+      - name: Run checks
+        run: make check
+      - name: Save commit hash
+        env:
+          GITHUB_COMMIT: ${{ github.sha }}
+        run: poetry run python scripts/write_commit_to_file.py
+      - name: Compile ladder zip
+        run: poetry run python scripts/create_ladder_zip.py
+      - name: Upload Bot Zip
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.ZIP_ARTIFACT_NAME }}
+          path: ${{ env.ZIP_FILE }}
+          if-no-files-found: error
+
+  run_test_game:
+    name: Run test game
+    needs: build
+    runs-on: ubuntu-24.04
+    container:
+      image: burnysc2/python-sc2-docker:py_3.12-sc2_4.10-v1.0.6-squashed
+    env:
+      PIP_ROOT_USER_ACTION: ignore
+      PIP_CACHE_DIR: /tmp/pip-cache
+      SC2PATH: /root/StarCraftII/
+      REPLAY_PATH: replay.SC2Replay
+    steps:
+      - name: Configure git defaults
+        run: |
+          # actions/checkout initializes an empty repo first; setting the default branch avoids
+          # noisy git init hints without affecting checkout behavior.
+          git config --global init.defaultBranch main
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install poetry
+        run: python -m pip install -U pip poetry
+      - name: Install requirements
+        run: poetry install --no-root
+      - name: Run test game
+        run: poetry run python scripts/run_test_game.py
+      - name: Upload Replay
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-game-replay
+          path: ${{ env.REPLAY_PATH }}
+          if-no-files-found: error
+
+  upload_to_ai_arena:
+    name: Upload to AI Arena
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - build
+      - run_test_game
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Configure git defaults
+        run: |
+          # actions/checkout initializes an empty repo first; setting the default branch avoids
+          # noisy git init hints without affecting checkout behavior.
+          git config --global init.defaultBranch main
+      - name: Checkout README
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: README.md
+          sparse-checkout-cone-mode: false
+      - name: Download Bot Zip
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ env.ZIP_ARTIFACT_NAME }}
+          path: bot_artifact
+      - name: Upload to AIArena
+        env:
+          UPLOAD_API_TOKEN: ${{ secrets.UPLOAD_API_TOKEN }}
+          UPLOAD_BOT_ID: ${{ secrets.UPLOAD_BOT_ID }}
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 \
+            --retry-all-errors \
+            -X PATCH \
+            -H "Authorization: Token ${UPLOAD_API_TOKEN}" \
+            -F "bot_zip=@bot_artifact/${ZIP_FILE};type=application/zip" \
+            -F "bot_zip_publicly_downloadable=true" \
+            -F "bot_data_publicly_downloadable=true" \
+            -F "bot_data_enabled=true" \
+            -F "wiki_article_content=<README.md" \
+            "https://aiarena.net/api/bots/${UPLOAD_BOT_ID}/"
