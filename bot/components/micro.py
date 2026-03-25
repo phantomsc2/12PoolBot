@@ -36,7 +36,7 @@ class CombatStance(Enum):
 @dataclass(frozen=True)
 class MicroParams:
     attack_threshold: Annotated[float, Parameter()]
-    supply_confidence_boost: Annotated[float, Parameter(loc=5.0, scale=1.0, min=0.0)]
+    supply_confidence_boost: Annotated[float, Parameter(mean=5.0, scale=1.0, min=0.0)]
 
 
 class Micro(Component):

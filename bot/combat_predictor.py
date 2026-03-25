@@ -39,8 +39,8 @@ class CombatPrediction:
 
 @dataclass(frozen=True)
 class CombatPredictorParams:
-    contact_range_internal: Annotated[float, Parameter(loc=6, scale=1, min=0)]
-    contact_range: Annotated[float, Parameter(loc=12, scale=2, min=0)]
+    contact_range_internal: Annotated[float, Parameter(mean=6.0, scale=1.0, min=0.0)]
+    contact_range: Annotated[float, Parameter(mean=12.0, scale=2.0, min=0.0)]
 
 
 class CombatPredictor:
