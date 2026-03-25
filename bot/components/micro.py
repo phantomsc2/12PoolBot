@@ -162,35 +162,48 @@ class Micro(Component):
 
 
 def _simulate_combat(units: Sequence[Unit], time_horizon: float) -> Mapping[Unit, float]:
+
     # vectorize stats
     alliance = np.array([u.owner_id for u in units])
-    range_matrix = np.array([[u.air_range if v.is_flying else u.ground_range for v in units] for u in units])
-    dps = np.array([[u.calculate_dps_vs_target(v) for v in units] for u in units])
+    flying = np.array([u.is_flying for u in units])
+    ground_range = np.array([u.ground_range for u in units])
+    air_range = np.array([u.air_range for u in units])
+    ground_dps = np.array([u.ground_dps for u in units])
+    air_dps = np.array([u.air_dps for u in units])
     radius = np.array([u.radius for u in units])
     health = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
     speed = np.array([1.4 * u.real_speed for u in units])
-    distance = _pairwise_distances([u.position for u in units]) - radius[:, None] - radius[None, :]
+    distance = _pairwise_distances([u.position for u in units])
+    inv_health = 1.0 / health
+
     # setup encounter
-    movement = time_horizon * speed
-    approach = movement[:, None] + movement[None, :]
-    in_range = distance <= approach + range_matrix
+    reach = radius + time_horizon * speed
+    approach = np.add.outer(reach, reach)
+    range_matrix = np.where(flying[None, :], air_range[:, None], ground_range[:, None])
+    dps_matrix = np.where(flying[None, :], air_dps[:, None], ground_dps[:, None])
     is_opponent = alliance[:, None] != alliance[None, :]
-    is_target = is_opponent & in_range
-    num_targets = np.sum(is_target, axis=1, keepdims=True)
-    targeting = np.divide(is_target, num_targets, where=num_targets != 0, out=np.zeros_like(distance))
+    is_target = is_opponent & (distance <= approach + range_matrix)
+    num_targets = is_target.sum(axis=1)
+    attack_scale = np.divide(
+        time_horizon,
+        num_targets,
+        out=np.zeros_like(health),
+        where=num_targets != 0,
+    )
+
     # transport
-    fire = dps * targeting * time_horizon / health[None, :]
-    effect = np.sum(fire, axis=1)
-    losses = np.sum(fire, axis=0)
+    fire = np.where(is_target, dps_matrix, 0.0) * attack_scale[:, None] * inv_health[None, :]
+    effect = fire.sum(axis=1)
+    losses = fire.sum(axis=0)
+
     # evaluate
-    battle = (effect > 0) & (losses > 0)
     outcome = np.empty_like(health)
+    battle = (effect > 0) & (losses > 0)
     outcome[battle] = np.log(effect[battle]) - np.log(losses[battle])
     outcome[(effect > 0) & (losses == 0)] = np.inf
     outcome[(effect == 0) & (losses > 0)] = -np.inf
     outcome[(effect == 0) & (losses == 0)] = 0.0
-    outcome_dict = dict(zip(units, outcome, strict=False))
-    return outcome_dict
+    return dict(zip(units, outcome, strict=False))
 
 
 def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
