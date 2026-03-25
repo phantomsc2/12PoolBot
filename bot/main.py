@@ -19,11 +19,9 @@ from sc2.data import Result
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.upgrade_id import UpgradeId
 
-from bot.combat_predictor import CombatPredictor, CombatPredictorParams
 from bot.components.micro import Micro, MicroParams
 from bot.components.strategy import Strategy, StrategyDecision
 from bot.consts import (
-    EXCLUDE_FROM_COMBAT,
     PARAMS_FILE,
     VERSION_FILE,
 )
@@ -32,7 +30,6 @@ from bot.overlord_drop import OverlordDrop
 
 @dataclass(frozen=True)
 class BotParams:
-    combat_predictor: CombatPredictorParams
     micro: MicroParams
 
 
@@ -53,6 +50,9 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         self.params = self.optimizer.ask(context)
         logger.info(f"{self.params=}")
 
+        logger.info(f"{self.optimizer.mean=}")
+        logger.info(f"{self.optimizer.scale_marginal=}")
+
         if VERSION_FILE.exists():
             version = VERSION_FILE.read_text()
             logger.info(f"{version=}")
@@ -72,13 +72,10 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         await super().on_step(iteration)
 
         strategy = self.decide_strategy()
-        units = self.all_own_units.exclude_type(EXCLUDE_FROM_COMBAT)
-        enemy_units = self.all_enemy_units.exclude_type(EXCLUDE_FROM_COMBAT)
-        predictor = CombatPredictor(self, units, enemy_units, self.params.combat_predictor)
 
         self.register_behavior(Mining(workers_per_gas=3 if strategy.gas_count > 0 else 0))
 
-        self.micro(predictor, self.params.micro)
+        self.micro(self.params.micro)
 
         if self.build_order_runner.build_completed:
             self._macro(strategy)

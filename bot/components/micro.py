@@ -1,5 +1,5 @@
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import cycle
@@ -8,7 +8,7 @@ from typing import Annotated
 import numpy as np
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import AMove, UseAbility
-from ares.consts import EngagementResult, UnitRole
+from ares.consts import UnitRole
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
 from leitwerk import Parameter
@@ -19,9 +19,8 @@ from sc2.position import Point2
 from sc2.unit import Unit
 from scipy.spatial.distance import pdist, squareform
 
-from bot.combat_predictor import CombatPredictor
 from bot.components.component import Component
-from bot.consts import MAX_MICRO_ACTIONS
+from bot.consts import EXCLUDE_FROM_COMBAT, MAX_MICRO_ACTIONS
 
 Point = tuple[int, int]
 HALF = Point2((0.5, 0.5))
@@ -35,20 +34,20 @@ class CombatStance(Enum):
 
 @dataclass(frozen=True)
 class MicroParams:
-    attack_threshold: Annotated[float, Parameter()]
-    supply_confidence_boost: Annotated[float, Parameter(mean=5.0, scale=1.0, min=0.0)]
+    attack_threshold: Annotated[float, Parameter(scale=0.1)]
+    time_horizon: Annotated[float, Parameter(mean=1.0, min=0.0)]
 
 
 class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
+        self._stance: dict[int, float] = {}
 
-    def micro(self, combat: CombatPredictor, params: MicroParams) -> None:
-
-        self._micro_army(combat, params)
+    def micro(self, params: MicroParams) -> None:
+        self._micro_army(params)
         self._micro_queens()
 
-    def _micro_army(self, combat: CombatPredictor, params: MicroParams) -> None:
+    def _micro_army(self, params: MicroParams) -> None:
         passengers = self.mediator.get_unit_role_dict[UnitRole.ATTACKING_TRANSPORT_SQUAD]
 
         def is_fighter(unit: Unit) -> bool:
@@ -58,7 +57,7 @@ class Micro(Component):
             )
 
         units = sorted(filter(is_fighter, self.units), key=lambda u: u.tag)
-        target_units = sorted(combat.enemy_units.not_flying, key=lambda u: u.tag)
+        target_units = sorted(self.enemy_units.not_flying.exclude_type(EXCLUDE_FROM_COMBAT), key=lambda u: u.tag)
         civilians = self.workers
         runby_pathing = self._runby_pathing()
 
@@ -84,24 +83,26 @@ class Micro(Component):
 
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
+        combatants = units + target_units + self.units(UnitTypeId.QUEEN)
+        simulation = _simulate_combat(combatants, 1.0)
+
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             if (self.actual_iteration % action_interval) != (unit.tag % action_interval):
                 continue
 
             maneuver = CombatManeuver()
-            outcome = combat.prediction.outcome_for[unit.tag]
-            confidence_boost = (self.supply_used / 200.0) * params.supply_confidence_boost
+            outcome = simulation[unit]
 
-            if outcome + params.attack_threshold + confidence_boost > EngagementResult.TIE:
+            self._stance.setdefault(unit.tag, 0.0)
+            if outcome >= 0.0:
                 stance = CombatStance.Attack
-            elif not self.mediator.is_position_safe(
-                grid=self.mediator.get_ground_grid,
-                position=unit.position,
-                weight_safety_limit=1.0,
-            ):
+                self._stance[unit.tag] = 1.0
+            elif outcome < np.inf:
                 stance = CombatStance.Retreat
+                self._stance[unit.tag] = -1.0
             else:
                 stance = CombatStance.Runby
+                self._stance[unit.tag] = 0.0
 
             if stance == CombatStance.Attack:
                 maneuver.add(AMove(unit, target))
@@ -158,6 +159,38 @@ class Micro(Component):
         cost = self.mediator.get_ground_grid
         target_array = np.atleast_2d(list(targets))
         return cy_dijkstra(cost, target_array)
+
+
+def _simulate_combat(units: Sequence[Unit], time_horizon: float) -> Mapping[Unit, float]:
+    # vectorize stats
+    alliance = np.array([u.owner_id for u in units])
+    range_matrix = np.array([[u.air_range if v.is_flying else u.ground_range for v in units] for u in units])
+    dps = np.array([[u.calculate_dps_vs_target(v) for v in units] for u in units])
+    radius = np.array([u.radius for u in units])
+    health = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
+    speed = np.array([1.4 * u.real_speed for u in units])
+    distance = _pairwise_distances([u.position for u in units]) - radius[:, None] - radius[None, :]
+    # setup encounter
+    movement = time_horizon * speed
+    approach = movement[:, None] + movement[None, :]
+    in_range = distance <= approach + range_matrix
+    is_opponent = alliance[:, None] != alliance[None, :]
+    is_target = is_opponent & in_range
+    num_targets = np.sum(is_target, axis=1, keepdims=True)
+    targeting = np.divide(is_target, num_targets, where=num_targets != 0, out=np.zeros_like(distance))
+    # transport
+    fire = dps * targeting * time_horizon / health[None, :]
+    effect = np.sum(fire, axis=1)
+    losses = np.sum(fire, axis=0)
+    # evaluate
+    battle = (effect > 0) & (losses > 0)
+    outcome = np.empty_like(health)
+    outcome[battle] = np.log(effect[battle]) - np.log(losses[battle])
+    outcome[(effect > 0) & (losses == 0)] = np.inf
+    outcome[(effect == 0) & (losses > 0)] = -np.inf
+    outcome[(effect == 0) & (losses == 0)] = 0.0
+    outcome_dict = dict(zip(units, outcome, strict=False))
+    return outcome_dict
 
 
 def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
