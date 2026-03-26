@@ -34,7 +34,8 @@ class CombatStance(Enum):
 
 @dataclass(frozen=True)
 class MicroParams:
-    attack_threshold: Annotated[float, Parameter(scale=0.1)]
+    attack_threshold: Annotated[float, Parameter(scale=0.3)]
+    runby_range: Annotated[float, Parameter(mean=0.3, min=0.0)]
     time_horizon: Annotated[float, Parameter(mean=1.0, min=0.0)]
 
 
@@ -94,9 +95,9 @@ class Micro(Component):
             maneuver = CombatManeuver()
             outcome = simulation[unit]
 
-            if outcome > params.attack_threshold:
+            if outcome > params.attack_threshold + params.runby_range:
                 stance = CombatStance.Attack
-            elif outcome < -params.attack_threshold:
+            elif outcome < params.attack_threshold - params.runby_range:
                 stance = CombatStance.Retreat
             else:
                 stance = CombatStance.Runby
