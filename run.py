@@ -58,9 +58,9 @@ def main():
         map_list = list(map_set)
 
         random_race = random.choice([
-            Race.Zerg,
+            # Race.Zerg,
             Race.Terran,
-            Race.Protoss,
+            # Race.Protoss,
         ])
         print("Starting local game...")
         run_game(
