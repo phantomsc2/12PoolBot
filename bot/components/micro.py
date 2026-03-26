@@ -42,6 +42,7 @@ class Micro(Component):
     def __init__(self) -> None:
         super().__init__()
         self._stance: dict[int, float] = {}
+        self._unit_value_cache: dict[UnitTypeId, float] = {}
 
     def micro(self, params: MicroParams) -> None:
         self._micro_army(params)
@@ -84,7 +85,7 @@ class Micro(Component):
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
         combatants = units + target_units + self.units(UnitTypeId.QUEEN)
-        simulation = _simulate_combat(combatants, 1.0)
+        simulation = self._simulate_combat(combatants, 1.0)
 
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             if (self.actual_iteration % action_interval) != (unit.tag % action_interval):
@@ -93,26 +94,21 @@ class Micro(Component):
             maneuver = CombatManeuver()
             outcome = simulation[unit]
 
-            self._stance.setdefault(unit.tag, 0.0)
-            if outcome >= 0.0:
+            if outcome > params.attack_threshold:
                 stance = CombatStance.Attack
-                self._stance[unit.tag] = 1.0
-            elif outcome < np.inf:
+            elif outcome < -params.attack_threshold:
                 stance = CombatStance.Retreat
-                self._stance[unit.tag] = -1.0
             else:
                 stance = CombatStance.Runby
-                self._stance[unit.tag] = 0.0
 
             if stance == CombatStance.Attack:
                 maneuver.add(AMove(unit, target))
             elif stance == CombatStance.Retreat:
-                retreat_path_limit = 3
-                retreat_path = retreat_pathing.get_path(unit.position, retreat_path_limit)
+                retreat_path = retreat_pathing.get_path(unit.position, 3)
                 retreat_target = Point2(retreat_path[-1]).offset(HALF)
                 maneuver.add(UseAbility(AbilityId.MOVE_MOVE, unit, retreat_target))
             else:
-                runby_path = runby_pathing.get_path(unit.position, 3)
+                runby_path = runby_pathing.get_path(unit.position, 2)
                 runby_point = Point2(runby_path[-1])
                 if cy_distance_to(unit.position, runby_point) < 1:
                     maneuver.add(AMove(unit, runby_point))
@@ -160,50 +156,57 @@ class Micro(Component):
         target_array = np.atleast_2d(list(targets))
         return cy_dijkstra(cost, target_array)
 
+    def _unit_value(self, unit_type: UnitTypeId) -> float:
+        if unit_type in self._unit_value_cache:
+            return self._unit_value_cache[unit_type]
+        cost = self.calculate_unit_value(unit_type)
+        value = cost.vespene + cost.minerals
+        self._unit_value_cache[unit_type] = value
+        return value
 
-def _simulate_combat(units: Sequence[Unit], time_horizon: float) -> Mapping[Unit, float]:
+    def _simulate_combat(self, units: Sequence[Unit], time_horizon: float) -> Mapping[Unit, float]:
+        # vectorize stats
+        alliance = np.array([u.owner_id for u in units])
+        flying = np.array([u.is_flying for u in units])
+        ground_range = np.array([u.ground_range for u in units])
+        air_range = np.array([u.air_range for u in units])
+        ground_dps = np.array([u.ground_dps for u in units])
+        air_dps = np.array([u.air_dps for u in units])
+        radius = np.array([u.radius for u in units])
+        health = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
+        unit_value = np.array([self._unit_value(u.type_id) for u in units])
+        speed = np.array([1.4 * u.real_speed for u in units])
+        distance = _pairwise_distances([u.position for u in units])
+        inv_health = unit_value / health
 
-    # vectorize stats
-    alliance = np.array([u.owner_id for u in units])
-    flying = np.array([u.is_flying for u in units])
-    ground_range = np.array([u.ground_range for u in units])
-    air_range = np.array([u.air_range for u in units])
-    ground_dps = np.array([u.ground_dps for u in units])
-    air_dps = np.array([u.air_dps for u in units])
-    radius = np.array([u.radius for u in units])
-    health = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
-    speed = np.array([1.4 * u.real_speed for u in units])
-    distance = _pairwise_distances([u.position for u in units])
-    inv_health = 1.0 / health
+        # setup encounter
+        reach = radius + time_horizon * speed
+        approach = np.add.outer(reach, reach)
+        range_matrix = np.where(flying[None, :], air_range[:, None], ground_range[:, None])
+        dps_matrix = np.where(flying[None, :], air_dps[:, None], ground_dps[:, None])
+        is_opponent = alliance[:, None] != alliance[None, :]
+        is_target = is_opponent & (distance <= approach + range_matrix)
+        num_targets = is_target.sum(axis=1)
+        attack_scale = np.divide(
+            time_horizon,
+            num_targets,
+            out=np.zeros_like(health),
+            where=num_targets != 0,
+        )
 
-    # setup encounter
-    reach = radius + time_horizon * speed
-    approach = np.add.outer(reach, reach)
-    range_matrix = np.where(flying[None, :], air_range[:, None], ground_range[:, None])
-    dps_matrix = np.where(flying[None, :], air_dps[:, None], ground_dps[:, None])
-    is_opponent = alliance[:, None] != alliance[None, :]
-    is_target = is_opponent & (distance <= approach + range_matrix)
-    num_targets = is_target.sum(axis=1)
-    attack_scale = np.divide(
-        time_horizon,
-        num_targets,
-        out=np.zeros_like(health),
-        where=num_targets != 0,
-    )
+        # transport
+        fire = np.where(is_target, dps_matrix, 0.0) * attack_scale[:, None] * inv_health[None, :]
+        effect = fire.sum(axis=1)
+        losses = fire.sum(axis=0)
 
-    # transport
-    fire = np.where(is_target, dps_matrix, 0.0) * attack_scale[:, None] * inv_health[None, :]
-    effect = fire.sum(axis=1)
-    losses = fire.sum(axis=0)
-
-    # evaluate
-    outcome = np.empty_like(health)
-    battle = (effect > 0) & (losses > 0)
-    outcome[battle] = np.log(effect[battle]) - np.log(losses[battle])
-    outcome[(effect > 0) & (losses == 0)] = np.inf
-    outcome[(effect == 0) & (losses > 0)] = -np.inf
-    outcome[(effect == 0) & (losses == 0)] = 0.0
-    return dict(zip(units, outcome, strict=False))
+        # evaluate
+        outcome = np.empty_like(health)
+        battle = (effect > 0) & (losses > 0)
+        outcome[battle] = np.log(effect[battle]) - np.log(losses[battle])
+        outcome[(effect > 0) & (losses == 0)] = np.inf
+        outcome[(effect == 0) & (losses > 0)] = -np.inf
+        outcome[(effect == 0) & (losses == 0)] = 0.0
+        return dict(zip(units, outcome, strict=False))
 
 
 def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
