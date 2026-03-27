@@ -12,7 +12,7 @@ packages = [{ include = "bot" }]
 python = ">=3.11, <3.13"
 ares-sc2 = { path = "ares-sc2", develop = false }
 cython-extensions-sc2 = ">=0.13.4"
-leitwerk = { git = "https://github.com/phantomsc2/leitwerk.git" }
+leitwerk = ">=0.7.0"
 scikit-image = ">=0.23.2,<0.24.0"
 
 [tool.poetry.group.dev.dependencies]
