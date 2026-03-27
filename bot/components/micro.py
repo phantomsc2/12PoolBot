@@ -35,8 +35,12 @@ class CombatStance(Enum):
 @dataclass(frozen=True)
 class MicroParams:
     attack_threshold: Annotated[float, Parameter(scale=0.3)]
-    runby_range: Annotated[float, Parameter(mean=0.3, min=0.0)]
+    runby_bonus: Annotated[float, Parameter(mean=0.3, min=0.0)]
     time_horizon: Annotated[float, Parameter(mean=1.0, min=0.0)]
+
+    @property
+    def runby_range(self) -> float:
+        return abs(self.attack_threshold) + self.runby_bonus
 
 
 class Micro(Component):
