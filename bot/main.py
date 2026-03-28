@@ -62,9 +62,8 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
 
         # await self.client.debug_create_unit(
         #     [
-        #         [UnitTypeId.OVERLORDTRANSPORT, 1, self.game_info.map_center, 1],
-        #         [UnitTypeId.ZERGLING, 8, self.game_info.map_center, 1],
-        #         [UnitTypeId.LAIR, 1, self.mediator.get_own_nat, 1],
+        #         [UnitTypeId.ZERGLING, 6, self.game_info.map_center, 1],
+        #         [UnitTypeId.ZERGLING, 8, self.game_info.map_center, 2],
         #     ]
         # )
 

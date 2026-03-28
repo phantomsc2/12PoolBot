@@ -11,7 +11,7 @@ from ares.behaviors.combat.individual import AMove, UseAbility
 from ares.consts import UnitRole
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
-from leitwerk import Parameter
+from leitwerk import parameter
 from loguru import logger
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
@@ -34,9 +34,9 @@ class CombatStance(Enum):
 
 @dataclass(frozen=True)
 class MicroParams:
-    attack_threshold: Annotated[float, Parameter(scale=0.3)]
-    runby_bonus: Annotated[float, Parameter(mean=0.3, min=0.0)]
-    time_horizon: Annotated[float, Parameter(mean=1.0, min=0.0)]
+    attack_threshold: float = parameter(scale=0.3)
+    runby_bonus: float = parameter(mean=0.3, min=0.0)
+    time_horizon: float = parameter(mean=1.0, min=0.0)
 
     @property
     def runby_range(self) -> float:
@@ -190,17 +190,32 @@ class Micro(Component):
         range_matrix = np.where(flying[None, :], air_range[:, None], ground_range[:, None])
         dps_matrix = np.where(flying[None, :], air_dps[:, None], ground_dps[:, None])
         is_opponent = alliance[:, None] != alliance[None, :]
-        is_target = is_opponent & (distance <= approach + range_matrix)
-        num_targets = is_target.sum(axis=1)
+        is_in_range = _sigmoid(approach + range_matrix - distance)
+        is_target = is_opponent.astype(float) * is_in_range
+        num_targets = is_target.sum(axis=1, keepdims=True)
         attack_scale = np.divide(
-            time_horizon,
+            is_target,
             num_targets,
-            out=np.zeros_like(health),
+            out=np.zeros_like(is_target),
             where=num_targets != 0,
         )
 
+        # alive_soft = np.ones_like(hp)
+        # for t, dt in zip(ts, dts, strict=False):
+        #     alive_soft = _sigmoid(hp / params.hp_temperature)
+        #     gate = _sigmoid((t - tau) / params.gate_temperature)
+        #     target_weights = gate * alive_soft[:, None] * alive_soft[None, :]
+        #     target_weights = target_weights / (np.sum(target_weights, axis=1, keepdims=True) + EPS)
+        #     pressure_out = dps * gate * target_weights
+        #     pressure_in = np.sum(pressure_out, axis=0)
+        #     hp = hp - dt * pressure_in
+        #
+        # loss_frac = 1 - hp / np.maximum(EPS, hp0)
+        # obj_kills = (1 - alive_soft) * value
+        # obj_dmg = loss_frac * value
+
         # transport
-        fire = np.where(is_target, dps_matrix, 0.0) * attack_scale[:, None] * inv_health[None, :]
+        fire = time_horizon * is_target * dps_matrix * attack_scale * inv_health[None, :]
         effect = fire.sum(axis=1)
         losses = fire.sum(axis=0)
 
@@ -240,3 +255,7 @@ def _medoid(points: Sequence[Point2]) -> Point2:
 
 def _pairwise_distances(positions: Sequence[Point2]) -> np.ndarray:
     return squareform(pdist(positions), checks=False)
+
+
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
