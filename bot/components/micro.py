@@ -3,16 +3,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, auto
 from itertools import cycle
-from typing import Annotated
 
 import numpy as np
 from ares.behaviors.combat import CombatManeuver
 from ares.behaviors.combat.individual import AMove, UseAbility
-from ares.consts import UnitRole
+from ares.consts import AIR_COST, AIR_RANGE, GROUND_COST, GROUND_RANGE, UnitRole
+from ares.dicts.weight_costs import WEIGHT_COSTS
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
 from leitwerk import parameter
-from loguru import logger
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
@@ -33,15 +32,23 @@ class CombatStance(Enum):
     Retreat = auto()
 
 
+@dataclass
+class CombatOutcome:
+    attrition: float
+    casualties: float
+
+    @property
+    def advantage(self) -> float:
+        return self.attrition - self.casualties
+
+
 @dataclass(frozen=True)
 class MicroParams:
     attack_threshold: float = parameter(scale=0.3)
-    runby_bonus: float = parameter(mean=0.3, min=0.0)
+    runby_threshold: float = parameter(mean=1.0, min=0.0)
     time_horizon: float = parameter(mean=1.0, min=0.0)
-
-    @property
-    def runby_range(self) -> float:
-        return abs(self.attack_threshold) + self.runby_bonus
+    health_temperature: float = parameter(mean=3.0, min=0.0)
+    distance_temperature: float = parameter(mean=1.0, min=0.0)
 
 
 class Micro(Component):
@@ -68,9 +75,6 @@ class Micro(Component):
         runby_pathing = self._runby_pathing()
 
         action_interval = max(1, math.ceil(len(units) / MAX_MICRO_ACTIONS))
-        if action_interval > 1:
-            logger.info(f"{action_interval=}")
-
         if not target_units or not civilians:
             for unit in units:
                 if unit.is_idle:
@@ -90,7 +94,7 @@ class Micro(Component):
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
         combatants = units + target_units + self.units(UnitTypeId.QUEEN)
-        simulation = self._simulate_combat(combatants, 1.0)
+        simulation = self._simulate_combat(combatants, params)
 
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             if (self.actual_iteration % action_interval) != (unit.tag % action_interval):
@@ -99,12 +103,12 @@ class Micro(Component):
             maneuver = CombatManeuver()
             outcome = simulation[unit]
 
-            if outcome > params.attack_threshold + params.runby_range:
+            if outcome.advantage > params.attack_threshold:
                 stance = CombatStance.Attack
-            elif outcome < params.attack_threshold - params.runby_range:
-                stance = CombatStance.Retreat
-            else:
+            elif outcome.casualties < params.runby_threshold:
                 stance = CombatStance.Runby
+            else:
+                stance = CombatStance.Retreat
 
             if stance == CombatStance.Attack:
                 maneuver.add(AMove(unit, target))
@@ -113,7 +117,7 @@ class Micro(Component):
                 retreat_target = Point2(retreat_path[-1]).offset(HALF)
                 maneuver.add(UseAbility(AbilityId.MOVE_MOVE, unit, retreat_target))
             else:
-                runby_path = runby_pathing.get_path(unit.position, 2)
+                runby_path = runby_pathing.get_path(unit.position, 3)
                 runby_point = Point2(runby_path[-1])
                 if cy_distance_to(unit.position, runby_point) < 1:
                     maneuver.add(AMove(unit, runby_point))
@@ -170,64 +174,86 @@ class Micro(Component):
         return value
 
     def _simulate_combat(
-        self, units: Sequence[Unit], time_horizon: float = 1.0, num_steps: int = 5
-    ) -> Mapping[Unit, float]:
+        self, units: Sequence[Unit], params: MicroParams, num_steps: int = 5
+    ) -> Mapping[Unit, CombatOutcome]:
 
         # vectorize stats
         alliance = np.array([u.owner_id for u in units])
         flying = np.array([u.is_flying for u in units])
-        ground_range = np.array([u.ground_range for u in units])
-        air_range = np.array([u.air_range for u in units])
-        ground_dps = np.array([u.ground_dps for u in units])
-        air_dps = np.array([u.air_dps for u in units])
+        ground_range = np.array([_ground_range(u) for u in units])
+        air_range = np.array([_air_range(u) for u in units])
+        ground_dps = np.array([_ground_dps(u) for u in units])
+        air_dps = np.array([_air_dps(u) for u in units])
         radius = np.array([u.radius for u in units])
-        health = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
+        health_initial = np.array([max(1.0, u.health + u.shield) for u in units])
+        health_max = np.array([max(1.0, u.health_max + u.shield_max) for u in units])
         speed = np.array([1.4 * u.real_speed for u in units])
         unit_value = np.array([self._unit_value(u.type_id) for u in units])
-        inv_health = 1.0 / health
         dps_matrix = np.where(flying[None, :], air_dps[:, None], ground_dps[:, None])
         range_matrix = np.where(flying[None, :], air_range[:, None], ground_range[:, None])
         is_opponent = alliance[:, None] != alliance[None, :]
         gap = _pairwise_distances([u.position for u in units]) - range_matrix
 
-        quantiles = np.linspace(start=0.0, stop=1.0, num=num_steps, endpoint=True)
-        times = np.asarray(expon(scale=time_horizon).ppf(quantiles))
-        # times = np.asarray(uniform(scale=time_horizon).ppf(quantiles))
-        attrition_history = np.empty((len(times), len(units)), dtype=float)
-        casualties_history = np.empty((len(times), len(units)), dtype=float)
-        for i, ti in enumerate(times):
+        health = health_initial.copy()
+        quantiles = np.linspace(start=0.0, stop=1.0, num=num_steps + 1, endpoint=True)
+        times = np.asarray(expon(scale=params.time_horizon).ppf(quantiles))
+        attrition = np.zeros_like(health)
+        casualties = np.zeros_like(health)
+        for _i, (ti, dti) in enumerate(zip(times, np.diff(times), strict=False)):
             # setup encounter
             reach = radius + ti * speed
-            is_target = is_opponent & (gap <= np.add.outer(reach, reach))
-            num_targets = is_target.sum(axis=1)
-            attack_scale = np.divide(
-                1.0,
+            approach = np.add.outer(reach, reach)
+            is_alive = _sigmoid(params.health_temperature * health / health_max)
+            is_in_range = _sigmoid(params.distance_temperature * (approach - gap))
+            is_target = is_opponent * is_in_range * is_alive[None, :]
+            num_targets = is_target.sum(axis=1, keepdims=True)
+            focus = np.divide(
+                is_target,
                 num_targets,
-                out=np.zeros_like(health),
+                out=np.zeros_like(is_target),
                 where=num_targets != 0,
             )
 
             # transport
-            fire = np.where(is_target, dps_matrix, 0.0)
-            fire *= attack_scale[:, None]
-            fire *= unit_value[None, :]
-            fire *= inv_health[None, :]
-            attrition_history[i, :] = fire.sum(axis=1)
-            casualties_history[i, :] = fire.sum(axis=0)
-        #
-        # attrition = np.trapezoid(attrition_history, times, axis=0)
-        # casualties = np.trapezoid(casualties_history, times, axis=0)
-        attrition = np.median(attrition_history, axis=0)
-        casualties = np.median(casualties_history, axis=0)
+            fire = is_alive[:, None] * is_target * dps_matrix * focus
+            effect = fire * unit_value[None, :] / health_max[None, :]
+            attrition += effect.sum(axis=1)
+            casualties += effect.sum(axis=0)
+            health -= dti * fire.sum(0)
 
         # evaluate
-        battle = (attrition > 0) & (casualties > 0)
-        outcome = np.zeros_like(attrition)
-        outcome[battle] = np.log(attrition[battle]) - np.log(casualties[battle])
-        outcome[(attrition > 0) & (casualties == 0)] = np.inf
-        outcome[(attrition == 0) & (casualties > 0)] = -np.inf
+        attrition = np.log1p(attrition / num_steps)
+        casualties = np.log1p(casualties / num_steps)
+        outcomes = [CombatOutcome(a, c) for a, c in zip(attrition, casualties, strict=False)]
+        return dict(zip(units, outcomes, strict=True))
 
-        return dict(zip(units, outcome, strict=True))
+
+def _ground_dps(unit: Unit) -> float:
+    if weight_cost := WEIGHT_COSTS.get(unit.type_id):
+        return weight_cost[GROUND_COST]
+    else:
+        return 1.4 * unit.ground_dps
+
+
+def _ground_range(unit: Unit) -> float:
+    if weight_cost := WEIGHT_COSTS.get(unit.type_id):
+        return weight_cost[GROUND_RANGE]
+    else:
+        return unit.ground_range
+
+
+def _air_dps(unit: Unit) -> float:
+    if weight_cost := WEIGHT_COSTS.get(unit.type_id):
+        return weight_cost[AIR_COST]
+    else:
+        return 1.4 * unit.air_dps
+
+
+def _air_range(unit: Unit) -> float:
+    if weight_cost := WEIGHT_COSTS.get(unit.type_id):
+        return weight_cost[AIR_RANGE]
+    else:
+        return unit.air_range
 
 
 def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
