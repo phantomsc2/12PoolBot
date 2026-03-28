@@ -11,7 +11,7 @@ from ares.behaviors.combat.individual import AMove, UseAbility
 from ares.consts import UnitRole
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
-from leitwerk import Parameter
+from leitwerk import parameter
 from loguru import logger
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
@@ -35,8 +35,13 @@ class CombatStance(Enum):
 
 @dataclass(frozen=True)
 class MicroParams:
-    attack_threshold: Annotated[float, Parameter(scale=0.1)]
-    time_horizon: Annotated[float, Parameter(mean=1.0, min=0.0)]
+    attack_threshold: float = parameter(scale=0.3)
+    runby_bonus: float = parameter(mean=0.3, min=0.0)
+    time_horizon: float = parameter(mean=1.0, min=0.0)
+
+    @property
+    def runby_range(self) -> float:
+        return abs(self.attack_threshold) + self.runby_bonus
 
 
 class Micro(Component):
@@ -85,18 +90,18 @@ class Micro(Component):
         retreat_pathing = cy_dijkstra(self.mediator.get_ground_grid, np.atleast_2d(retreat_targets))
 
         combatants = units + target_units + self.units(UnitTypeId.QUEEN)
-        simulation = self._simulate_combat(combatants)
+        simulation = self._simulate_combat(combatants, 1.0)
 
         for unit, target, retreat_target in zip(units, cycle(attack_targets), cycle(retreat_targets)):
             if (self.actual_iteration % action_interval) != (unit.tag % action_interval):
                 continue
 
             maneuver = CombatManeuver()
-            confidence = simulation[unit]
+            outcome = simulation[unit]
 
-            if confidence > 0.0:
+            if outcome > params.attack_threshold + params.runby_range:
                 stance = CombatStance.Attack
-            elif confidence < 0.0:
+            elif outcome < params.attack_threshold - params.runby_range:
                 stance = CombatStance.Retreat
             else:
                 stance = CombatStance.Runby
@@ -155,6 +160,14 @@ class Micro(Component):
         cost = self.mediator.get_ground_grid
         target_array = np.atleast_2d(list(targets))
         return cy_dijkstra(cost, target_array)
+
+    def _unit_value(self, unit_type: UnitTypeId) -> float:
+        if unit_type in self._unit_value_cache:
+            return self._unit_value_cache[unit_type]
+        cost = self.calculate_unit_value(unit_type)
+        value = cost.vespene + cost.minerals
+        self._unit_value_cache[unit_type] = value
+        return value
 
     def _simulate_combat(
         self, units: Sequence[Unit], time_horizon: float = 1.0, num_steps: int = 5
@@ -216,14 +229,6 @@ class Micro(Component):
 
         return dict(zip(units, outcome, strict=True))
 
-    def _unit_value(self, unit_type: UnitTypeId) -> float:
-        if unit_type in self._unit_value_cache:
-            return self._unit_value_cache[unit_type]
-        cost = self.calculate_unit_value(unit_type)
-        value = cost.vespene + cost.minerals
-        self._unit_value_cache[unit_type] = value
-        return value
-
 
 def _structure_perimeter(structure: Unit) -> Iterable[tuple[int, int]]:
     if structure.is_flying:
@@ -251,3 +256,7 @@ def _medoid(points: Sequence[Point2]) -> Point2:
 
 def _pairwise_distances(positions: Sequence[Point2]) -> np.ndarray:
     return squareform(pdist(positions), checks=False)
+
+
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
