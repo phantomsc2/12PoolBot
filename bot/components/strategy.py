@@ -47,8 +47,7 @@ class Strategy(Component):
 
         composition: UnitComposition = {}
         if mutalisk_switch:
-            composition[UnitTypeId.MUTALISK] = {"proportion": 0.5, "priority": 1}
-            composition[UnitTypeId.ZERGLING] = {"proportion": 0.5, "priority": 1}
+            composition[UnitTypeId.MUTALISK] = {"proportion": 1.0, "priority": 1}
         elif (
             not self.larva.exists
             and not cy_unit_pending(self, UnitTypeId.QUEEN)
