@@ -93,8 +93,7 @@ class Strategy(Component):
                 tech_targets.add(UnitTypeId.HIVE)
                 upgrade_targets.add(UpgradeId.ZERGMELEEWEAPONSLEVEL3)
         if mutalisk_switch:
-            tech_targets.add(UnitTypeId.MUTALISK)
-            # tech_targets.add(UnitTypeId.SPIRE)
+            tech_targets.update({UnitTypeId.LAIR, UnitTypeId.SPIRE})
         if make_banes:
             tech_targets.add(UnitTypeId.BANELINGNEST)
         if dropperlord_count > 0:

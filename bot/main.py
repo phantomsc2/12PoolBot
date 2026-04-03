@@ -111,11 +111,26 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
 
     def _macro(self, strategy: StrategyDecision) -> None:
         plan = MacroPlan()
+        mutalisk_plan = UnitTypeId.MUTALISK in strategy.army_composition
+        has_lair = self.townhalls(UnitTypeId.LAIR).exists
+        handled_techs: set[UnitTypeId] = set()
+
         if self.supply_left == 0:
             plan.add(AutoSupply(self.start_location))
         plan.add(GasBuildingController(to_count=strategy.gas_count))
+
+        if mutalisk_plan:
+            if UnitTypeId.LAIR in strategy.tech_targets and self.minerals >= 150:
+                plan.add(TechUp(desired_tech=UnitTypeId.LAIR, base_location=self.start_location))
+                handled_techs.add(UnitTypeId.LAIR)
+            if UnitTypeId.SPIRE in strategy.tech_targets:
+                plan.add(TechUp(desired_tech=UnitTypeId.SPIRE, base_location=self.start_location))
+                handled_techs.add(UnitTypeId.SPIRE)
+
         plan.add(UpgradeController(strategy.upgrade_targets, self.start_location))
         for tech in strategy.tech_targets:
+            if tech in handled_techs:
+                continue
             plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
         if (
             UnitTypeId.LAIR in strategy.tech_targets
@@ -127,7 +142,9 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
         else:
             if strategy.morph_drone:
                 plan.add(BuildWorkers(to_count=int(self.supply_workers) + 1))
-            else:
+            # Work around an ares-sc2 TechUp bug for zerg larva units by only
+            # handing mutalisk production to SpawnController after lair tech exists.
+            elif not mutalisk_plan or has_lair:
                 plan.add(SpawnController(army_composition_dict=strategy.army_composition))
             if self.can_afford(UnitTypeId.HATCHERY) and self.already_pending_upgrade(UpgradeId.ZERGLINGMOVEMENTSPEED):
                 plan.add(ExpansionController(to_count=len(self.expansion_locations_list), can_afford_check=False))
