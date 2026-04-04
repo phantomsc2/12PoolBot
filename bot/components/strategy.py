@@ -79,6 +79,9 @@ class Strategy(Component):
         if dropperlord_count > 0 and self.structure_type_build_progress(UnitTypeId.LAIR) == 0.0 and self.vespene < 100:
             gas_count = max(1, gas_count)
 
+        if self.vespene > 500:
+            gas_count = 0
+
         upgrade_targets: set[UpgradeId] = set()
         tech_targets: set[UnitTypeId] = set()
         upgrade_targets.add(UpgradeId.ZERGLINGMOVEMENTSPEED)
