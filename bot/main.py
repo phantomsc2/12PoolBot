@@ -133,11 +133,11 @@ class TwelvePoolBot(Strategy, Micro, AresBot):
                 continue
             plan.add(TechUp(desired_tech=tech, base_location=self.start_location))
         if (
-            UnitTypeId.LAIR & strategy.tech_targets
+            UnitTypeId.LAIR in strategy.tech_targets
             and self.vespene >= 100
             and self.structure_type_build_progress(UnitTypeId.LAIR) == 0.0
         ) or (
-            UnitTypeId.HIVE & strategy.tech_targets
+            UnitTypeId.HIVE in strategy.tech_targets
             and self.vespene >= 150
             and self.structure_type_build_progress(UnitTypeId.LAIR) == 1.0
             and self.structure_type_build_progress(UnitTypeId.INFESTATIONPIT) == 1.0
