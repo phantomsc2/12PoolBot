@@ -11,7 +11,6 @@ from ares.consts import AIR_COST, AIR_RANGE, GROUND_COST, GROUND_RANGE, UnitRole
 from ares.dicts.weight_costs import WEIGHT_COSTS
 from cython_extensions import cy_distance_to
 from cython_extensions.dijkstra import DijkstraPathing, cy_dijkstra
-from leitwerk import parameter
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.position import Point2
