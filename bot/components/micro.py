@@ -44,11 +44,11 @@ class CombatOutcome:
 
 @dataclass(frozen=True)
 class MicroParams:
-    attack_threshold: float = parameter(scale=0.3)
-    runby_threshold: float = parameter(mean=1.0, min=0.0)
-    time_horizon: float = parameter(mean=1.0, min=0.0)
-    health_temperature: float = parameter(mean=3.0, min=0.0)
-    distance_temperature: float = parameter(mean=1.0, min=0.0)
+    attack_threshold: float = 0.0
+    runby_threshold: float = 0.5
+    time_horizon: float = 0.5
+    health_temperature: float = 5.0
+    distance_temperature: float = 0.2
 
 
 class Micro(Component):
